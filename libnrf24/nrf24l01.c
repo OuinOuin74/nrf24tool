@@ -5,39 +5,28 @@
 
 #include "nrf24l01.h"
 
-// frequency we're running at
-#define	SYS_FREQ 64000000
+#include "core/kernel.h"
+#include "furi_hal_spi.h"
+
 
 //Taken from tft_master.h, by Syed Tahmid Mahbub
-void nrf_delay_ms(unsigned long i){
+void nrf_delay_ms(uint32_t i){
 /* Create a software delay about i ms long
  * Parameters:
  *      i:  equal to number of milliseconds for delay
  * Returns: Nothing
- * Note: Uses Core Timer. Core Timer is cleared at the initialiazion of
- *      this function. So, applications sensitive to the Core Timer are going
- *      to be affected
  */
-    unsigned int j;
-    j = dTime_ms * i;
-    WriteCoreTimer(0);
-    while (ReadCoreTimer() < j);
+    furi_delay_ms(i);
 }
 
 //Taken from tft_master.h, by Syed Tahmid Mahbub
-void nrf_delay_us(unsigned long i){
+void nrf_delay_us(uint32_t i){
 /* Create a software delay about i us long
  * Parameters:
  *      i:  equal to number of microseconds for delay
  * Returns: Nothing
- * Note: Uses Core Timer. Core Timer is cleared at the initialiazion of
- *      this function. So, applications sensitive to the Core Timer are going
- *      to be affected
  */
-    unsigned int j;
-    j = dTime_us * i;
-    WriteCoreTimer(0);
-    while (ReadCoreTimer() < j);
+    furi_delay_us(i);
 }
 
 char rf_spiwrite(unsigned char c){ // Transfer to SPI
@@ -48,12 +37,8 @@ char rf_spiwrite(unsigned char c){ // Transfer to SPI
 }
 
 void init_SPI(){
-    // Set up SPI2 to be active high, master, 8 bit mode, and ~4 Mhz CLK
-    SpiChnOpen(2, SPI_OPEN_MSTEN | SPI_OPEN_MODE8 | SPI_OPEN_ON | SPI_OPEN_CKE_REV, 16);
-    // Set SDI2 to pin 12
-    PPSInput(3, SDI2, RPA4);
-    // Set SDO2 to pin 9
-    PPSOutput(3, RPA2, SDO2);
+    furi_hal_spi_bus_handle_init(&furi_hal_spi_bus_handle_external);
+    furi_hal_spi_acquire(&furi_hal_spi_bus_handle_external);
 }
 
 void nrf_setup(){

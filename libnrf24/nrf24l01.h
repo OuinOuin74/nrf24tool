@@ -7,15 +7,12 @@
  *
  */
 
- #define _SUPPRESS_PLIB_WARNING 1
- #include <plib.h>
  #include "inttypes.h"
+ #include "furi_hal_gpio.h"
 
-#define _csn         LATBbits.LATB9
-#define TRIS_csn     TRISBbits.TRISB9
+#define nrf24l01_TIMEOUT 500
+#define nrf24l01_CE_PIN &gpio
 
-#define _ce         LATBbits.LATB8
-#define TRIS_ce     TRISBbits.TRISB8
 
 // Credit to S. Brennen Ball for the register definitions
 // https://github.com/fffaraz/Introduction-to-Microprocessors/blob/master/material/atmel/sample_code/nordic1/nrf24l01.h
@@ -747,8 +744,8 @@ int nrf_send_payload(char * data, char len);
 
 //\cond
 //From tft_master.h, by Syed Tahmid Mahbub
-void nrf_delay_ms(unsigned long);
+void nrf_delay_ms(uint32_t);
 
 //From tft_master.h, by Syed Tahmid Mahbub
-void nrf_delay_us(unsigned long);
+void nrf_delay_us(uint32_t);
 //\endcond

@@ -55,7 +55,6 @@
 
 /** Write device register
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      reg     - register
  * @param      data    - data to write
  *
@@ -65,7 +64,6 @@ uint8_t nrf24_write_reg(uint8_t reg, uint8_t data);
 
 /** Write buffer to device register
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      reg     - register
  * @param      data    - data to write
  * @param      size    - size of data to write
@@ -76,7 +74,6 @@ uint8_t nrf24_write_buf_reg(uint8_t reg, uint8_t* data, uint8_t size);
 
 /** Read device register
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      reg     - register
  * @param[out] data    - pointer to data
  *
@@ -86,7 +83,6 @@ uint8_t nrf24_read_reg(uint8_t reg, uint8_t* data, uint8_t size);
 
 /** Power up the radio for operation
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     device status
  */
@@ -94,7 +90,6 @@ uint8_t nrf24_power_up();
 
 /** Power down the radio
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     device status
  */
@@ -102,7 +97,6 @@ uint8_t nrf24_set_idle();
 
 /** Sets the radio to RX mode
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     device status
  */
@@ -110,7 +104,6 @@ uint8_t nrf24_set_rx_mode();
 
 /** Sets the radio to TX mode
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     device status
  */
@@ -132,7 +125,6 @@ void nrf24_deinit();
 
 /** Send flush rx command
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  *
  * @return     device status
  */
@@ -140,7 +132,6 @@ uint8_t nrf24_flush_rx();
 
 /** Send flush tx command
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  *
  * @return     device status
  */
@@ -148,7 +139,6 @@ uint8_t nrf24_flush_tx();
 
 /** Gets the RX packet length in data pipe 0
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  *             pipe - pipe index (0..5)
  * @return     packet length in data pipe 0
  */
@@ -156,7 +146,6 @@ uint8_t nrf24_get_packetlen(uint8_t pipe);
 
 /** Sets the RX packet length in data pipe 0
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      len - length to set
  * 
  * @return     device status
@@ -165,7 +154,6 @@ uint8_t nrf24_set_packetlen(uint8_t len);
 
 /** Gets configured length of MAC address
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     MAC address length
  */
@@ -173,7 +161,6 @@ uint8_t nrf24_get_maclen();
 
 /** Sets configured length of MAC address
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      maclen - length to set MAC address to, must be greater than 1 and less than 6
  * 
  * @return     MAC address length
@@ -182,7 +169,6 @@ uint8_t nrf24_set_maclen(uint8_t maclen);
 
 /** Gets the current status flags from the STATUS register
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     status flags
  */
@@ -190,7 +176,6 @@ uint8_t nrf24_status();
 
 /** Gets the current transfer rate
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     transfer rate in bps
  */
@@ -198,7 +183,6 @@ uint32_t nrf24_get_rate();
 
 /** Sets the transfer rate
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      rate - the transfer rate in bps
  * 
  * @return     device status
@@ -208,7 +192,6 @@ uint8_t nrf24_set_rate(uint32_t rate);
 /** Gets the current channel
  * In nrf24, the channel number is multiplied times 1MHz and added to 2400MHz to get the frequency
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * 
  * @return     channel
  */
@@ -216,7 +199,6 @@ uint8_t nrf24_get_chan();
 
 /** Sets the channel
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      frequency - the frequency in hertz
  * 
  * @return     device status
@@ -225,7 +207,6 @@ uint8_t nrf24_set_chan(uint8_t chan);
 
 /** Gets the source mac address
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param[out] mac - the source mac address
  * 
  * @return     device status
@@ -234,7 +215,6 @@ uint8_t nrf24_get_src_mac(uint8_t* mac);
 
 /** Sets the source mac address
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      mac - the mac address to set
  * @param      size - the size of the mac address (2 to 5)
  * 
@@ -244,7 +224,6 @@ uint8_t nrf24_set_src_mac(uint8_t* mac, uint8_t size);
 
 /** Gets the dest mac address
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param[out] mac - the source mac address
  * 
  * @return     device status
@@ -253,7 +232,6 @@ uint8_t nrf24_get_dst_mac(uint8_t* mac);
 
 /** Sets the dest mac address
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      mac - the mac address to set
  * @param      size - the size of the mac address (2 to 5)
  * 
@@ -263,7 +241,6 @@ uint8_t nrf24_set_dst_mac(uint8_t* mac, uint8_t size);
 
 /** Reads RX packet
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param[out] packet - the packet contents
  * @param[out] ret_packetsize - size of the received packet
  * @param      packet_size: >1 - size, 1 - packet length is determined by RX_PW_P0 register, 0 - it is determined by dynamic payload length command
@@ -274,7 +251,6 @@ uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* ret_packetsize, uint8_t packet_
 
 /** Sends TX packet
  *
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      packet - the packet contents
  * @param      size - packet size
  * @param      ack - boolean to determine whether an ACK is required for the packet or not
@@ -285,7 +261,6 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack);
 
 /** Configure the radio
  * This is not comprehensive, but covers a lot of the common configuration options that may be changed
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      rate - transfer rate in Mbps (1 or 2)
  * @param      srcmac - source mac address
  * @param      dstmac - destination mac address
@@ -297,13 +272,9 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack);
  */
 void nrf24_configure(uint8_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t channel, bool noack, bool disable_aa);
 
-// Set mac address (MSB first), Return: Status
-uint8_t  nrf24_set_mac(uint8_t mac_addr, uint8_t *mac, uint8_t mlen);
-
 /** Configures the radio for "promiscuous mode" and primes it for rx
  * This is not an actual mode of the nrf24, but this function exploits a few bugs in the chip that allows it to act as if it were.
  * See http://travisgoodspeed.blogspot.com/2011/02/promiscuity-is-nrf24l01s-duty.html for details.
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      channel - channel to tune to
  * @param      rate - transfer rate in Mbps (1 or 2) 
  */
@@ -311,7 +282,6 @@ void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate);
 
 /** Listens for a packet and returns first possible address sniffed
  * Call this only after calling nrf24_init_promisc_mode
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      maclen - length of target mac address
  * @param[out] addresses - sniffed address
  * 
@@ -321,7 +291,6 @@ bool nrf24_sniff_address(uint8_t maclen, uint8_t* address);
 
 /** Sends ping packet on each channel for designated tx mac looking for ack
  * 
- * @param      handle  - pointer to FuriHalSpiHandle
  * @param      srcmac - source address
  * @param      dstmac - destination address
  * @param      maclen - length of address

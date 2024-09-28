@@ -583,13 +583,3 @@ uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uin
 
     return ch;
 }
-
-uint8_t nrf24_set_mac(uint8_t mac_addr, uint8_t *mac, uint8_t mlen)
-{
-    uint8_t addr[5];
-	for(int i = 0; i < mlen; i++)
-    {
-        addr[i] = mac[mlen - i - 1];
-    }
-	return nrf24_write_buf_reg(mac_addr, addr, mlen);
-}

@@ -330,15 +330,9 @@ uint8_t nrf24_set_tx_mode()
     return status;
 }
 
-void nrf24_configure(uint8_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t channel, bool noack, bool disable_aa)
+void nrf24_configure(uint32_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t channel, bool noack, bool disable_aa)
 {
     assert(channel <= 125);
-    assert(rate == 1 || rate == 2);
-
-    if(rate == 2)
-        rate = 8; // 2Mbps
-    else
-        rate = 0; // 1Mbps
 
     nrf24_write_reg(REG_CONFIG, 0x00); // Stop nRF
     nrf24_set_idle();
@@ -374,7 +368,7 @@ void nrf24_configure(uint8_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t mac
         nrf24_set_dst_mac(dstmac, maclen);
 
     nrf24_write_reg(REG_RF_CH, channel);
-    nrf24_write_reg(REG_RF_SETUP, rate);
+    nrf24_set_rate(rate);
     furi_delay_ms(200);
 }
 

@@ -261,7 +261,7 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack);
 
 /** Configure the radio
  * This is not comprehensive, but covers a lot of the common configuration options that may be changed
- * @param      rate - transfer rate in Mbps (1 or 2)
+ * @param      rate - transfer rate in kbps
  * @param      srcmac - source mac address
  * @param      dstmac - destination mac address
  * @param      maclen - length of mac address
@@ -270,7 +270,7 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack);
  * @param      disable_aa - if true, disable ShockBurst
  * 
  */
-void nrf24_configure(uint8_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t channel, bool noack, bool disable_aa);
+void nrf24_configure(uint32_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t channel, bool noack, bool disable_aa);
 
 /** Configures the radio for "promiscuous mode" and primes it for rx
  * This is not an actual mode of the nrf24, but this function exploits a few bugs in the chip that allows it to act as if it were.

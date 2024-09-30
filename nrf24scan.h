@@ -4,6 +4,9 @@
 #include <gui/gui.h>
 #include <gui/view_port.h>
 
+#define LOG_TAG "NRF24SCAN"
+#define MAX_CHANNEL	125
+#define MAX_ADDR	6
 
 /* Application context structure */
 typedef struct

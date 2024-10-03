@@ -48,6 +48,7 @@
 
 #define MAX_CHANNEL      125
 #define MAX_PIPE         5
+#define MIN_PAYLOAD_SIZE 1
 #define MAX_PAYLOAD_SIZE 32
 #define MAX_CRC_LENGHT   2
 #define MAX_MAC_SIZE     5
@@ -58,8 +59,6 @@
 #define nrf24_TIMEOUT 500
 #define nrf24_CE_PIN  &gpio_ext_pb2
 #define nrf24_HANDLE  furi_hal_spi_bus_handle_external
-
-uint8_t EMPTY_MAC[] = {0, 0, 0, 0, 0};
 
 typedef enum {
     DATA_RATE_1MBPS = 0, // 1 Mbps (default)
@@ -82,31 +81,30 @@ typedef enum {
 } nrf24_mode;
 
 typedef enum {
-    ADDR_WIDTH_ILLEGAL = 0,
+    ADDR_WIDTH_2_BYTES = 0,
     ADDR_WIDTH_3_BYTES,
     ADDR_WIDTH_4_BYTES,
     ADDR_WIDTH_5_BYTES
 } nrf24_addr_width;
 
 typedef struct NRF24L01_Config {
-    uint8_t channel;            // RF channel (0 - 125)
-    nrf24_data_rate data_rate;  // Transmission speed: 0 -> 1 Mbps, 1 -> 2 Mbps, 2 -> 250 kbps
-    nrf24_tx_power tx_power;    // Transmission power: 0-> -18 dBm, 1 -> -12 dBm, 2-> -6 dBm, 3-> 0 dBm
-    uint8_t crc_length;         // CRC length: 1 or 2 bytes
-    nrf24_addr_width mac_len;   // Address width: 3, 4 or 5 bytes
-    uint8_t arc;                // Auto retransmit count (0-15)
-    uint16_t ard;               // Retransmit delay (250 µs to 4000 µs)
-    uint8_t rf_power_mode;      // RF power mode: Power Down, Standby, RX, TX
-    bool auto_ack;              // Auto ACK aka "Enhanced ShockBurst"
-    bool dynamic_payload;       // Dynamic payload (require auto_ack)
-    bool ack_payload;           // Return ACK + payload (require dynamic payload)
-    bool no_ack;                // Disable 
-    bool enable_crc;            // CRC enabled (forced enable if auto_ack enabled)
+    uint8_t channel; // RF channel (0 - 125)
+    nrf24_data_rate data_rate; // Transmission speed: 0 -> 1 Mbps, 1 -> 2 Mbps, 2 -> 250 kbps
+    nrf24_tx_power tx_power; // Transmission power: 0-> -18 dBm, 1 -> -12 dBm, 2-> -6 dBm, 3-> 0 dBm
+    uint8_t crc_length; // CRC length: 1 or 2 bytes
+    nrf24_addr_width mac_len; // Address width: 3, 4 or 5 bytes
+    uint8_t arc; // Auto retransmit count (0-15)
+    uint16_t ard; // Retransmit delay (250 µs to 4000 µs)
+    bool auto_ack; // Auto ACK aka "Enhanced ShockBurst"
+    bool dynamic_payload; // Dynamic payload (require auto_ack)
+    bool ack_payload; // Return ACK + payload (require dynamic payload)
+    bool tx_no_ack; // Send "NO_ACK" flag with transmission
+    bool enable_crc; // CRC enabled (forced enable if auto_ack enabled)
 
-    uint8_t* tx_address;       // Transmission address
-    uint8_t* rx_address;       // Reception address (pipe 0) (equal to tx_adress if auto_ack enabled)
+    uint8_t* tx_addr; // Transmission address
+    uint8_t* rx_addr; // Reception address (pipe 0) (equal to tx_adress if auto_ack enabled)
 
-    uint8_t payload_size; // Fixed payload size (1 to 32 bytes)
+    uint8_t payload_size; // Fixed payload size (1 to 32 bytes) (unset if dynamic_payload is enabled)
 } NRF24L01_Config;
 
 /* Low level API */
@@ -220,7 +218,7 @@ uint8_t nrf24_status();
  * 
  * @return     transfer rate in bps
  */
-uint32_t nrf24_get_rate();
+nrf24_data_rate nrf24_get_rate();
 
 /** Sets the transfer rate
  *
@@ -228,7 +226,7 @@ uint32_t nrf24_get_rate();
  * 
  * @return     device status
  */
-uint8_t nrf24_set_rate(uint32_t rate);
+uint8_t nrf24_set_rate(nrf24_data_rate rate);
 
 /** Gets the current channel
  * In nrf24, the channel number is multiplied times 1MHz and added to 2400MHz to get the frequency
@@ -252,7 +250,7 @@ uint8_t nrf24_set_chan(uint8_t chan);
  * 
  * @return     device status
  */
-uint8_t nrf24_get_src_mac(uint8_t* mac);
+uint8_t nrf24_get_rx_mac(uint8_t* mac);
 
 /** Sets the source mac address
  *
@@ -261,7 +259,7 @@ uint8_t nrf24_get_src_mac(uint8_t* mac);
  * 
  * @return     device status
  */
-uint8_t nrf24_set_src_mac(uint8_t* mac, uint8_t size);
+uint8_t nrf24_set_rx_mac(uint8_t* mac, uint8_t size);
 
 /** Gets the dest mac address
  *
@@ -269,7 +267,7 @@ uint8_t nrf24_set_src_mac(uint8_t* mac, uint8_t size);
  * 
  * @return     device status
  */
-uint8_t nrf24_get_dst_mac(uint8_t* mac);
+uint8_t nrf24_get_tx_mac(uint8_t* mac);
 
 /** Sets the dest mac address
  *
@@ -278,7 +276,7 @@ uint8_t nrf24_get_dst_mac(uint8_t* mac);
  * 
  * @return     device status
  */
-uint8_t nrf24_set_dst_mac(uint8_t* mac, uint8_t size);
+uint8_t nrf24_set_tx_mac(uint8_t* mac, uint8_t size);
 
 /** Reads RX packet
  *

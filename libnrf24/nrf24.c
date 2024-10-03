@@ -6,6 +6,10 @@
 #include <furi_hal_resources.h>
 #include <string.h>
 
+uint8_t EMPTY_MAC[] = {0, 0, 0, 0, 0};
+
+char LOG_TAG[] = "libNRF24";
+
 void nrf24_init() {
     furi_hal_spi_bus_handle_init(&nrf24_HANDLE);
     furi_hal_spi_acquire(&nrf24_HANDLE);
@@ -78,7 +82,7 @@ nrf24_addr_width nrf24_get_maclen() {
 }
 
 uint8_t nrf24_set_maclen(nrf24_addr_width maclen) {
-    if(maclen == ADDR_WIDTH_ILLEGAL || maclen > MAX_MAC_SIZE) return 0;
+    if(maclen > MAX_MAC_SIZE) return 0;
     uint8_t status = 0;
     status = nrf24_write_reg(REG_SETUP_AW, maclen);
     return status;
@@ -99,10 +103,8 @@ nrf24_data_rate nrf24_get_rate() {
         return DATA_RATE_250KBPS;
     else if(rate == 0x08) // 2Mbps
         return DATA_RATE_2MBPS;
-    else if(rate == 0x00) // 1Mbps
+    else // 1Mbps
         return DATA_RATE_1MBPS;
-    else
-        return NULL;
 }
 
 uint8_t nrf24_set_rate(nrf24_data_rate rate) {
@@ -161,15 +163,27 @@ uint8_t nrf24_set_crc_lenght(uint8_t lenght) {
     return status;
 }
 
-uint8_t nrf24_get_src_mac(uint8_t* mac) {
-    uint8_t size = 0;
+uint8_t nrf24_set_crc(bool enable) {
     uint8_t status = 0;
-    size = nrf24_get_maclen();
-    status = nrf24_read_reg(REG_RX_ADDR_P0, mac, size);
+    uint8_t config = 0;
+    nrf24_read_reg(REG_CONFIG, &config, 1);
+    if(enable)
+        config |= (1 << 3);
+    else
+        config &= ~(1 << 3);
+
+    status = nrf24_write_reg(REG_CONFIG, config);
     return status;
 }
 
-uint8_t nrf24_set_src_mac(uint8_t* mac, uint8_t size) {
+uint8_t nrf24_get_rx_mac(uint8_t* mac) {
+    uint8_t size = 0;
+    size = nrf24_get_maclen();
+    nrf24_read_reg(REG_RX_ADDR_P0, mac, size);
+    return size;
+}
+
+uint8_t nrf24_set_rx_mac(uint8_t* mac, uint8_t size) {
     uint8_t status = 0;
     nrf24_set_maclen(size);
     nrf24_write_buf_reg(REG_RX_ADDR_P0, EMPTY_MAC, 5);
@@ -177,7 +191,7 @@ uint8_t nrf24_set_src_mac(uint8_t* mac, uint8_t size) {
     return status;
 }
 
-uint8_t nrf24_get_dst_mac(uint8_t* mac) {
+uint8_t nrf24_get_tx_mac(uint8_t* mac) {
     uint8_t size = 0;
     uint8_t status = 0;
     size = nrf24_get_maclen();
@@ -185,7 +199,7 @@ uint8_t nrf24_get_dst_mac(uint8_t* mac) {
     return status;
 }
 
-uint8_t nrf24_set_dst_mac(uint8_t* mac, uint8_t size) {
+uint8_t nrf24_set_tx_mac(uint8_t* mac, uint8_t size) {
     uint8_t status = 0;
     nrf24_set_maclen(size);
     nrf24_write_buf_reg(REG_TX_ADDR, EMPTY_MAC, 5);
@@ -194,23 +208,22 @@ uint8_t nrf24_set_dst_mac(uint8_t* mac, uint8_t size) {
 }
 
 uint8_t nrf24_get_packetlen(uint8_t pipe) {
-    if (pipe > MAX_PIPE) return 0;
+    if(pipe > MAX_PIPE) return 0;
     uint8_t len = 0;
     nrf24_read_reg(RX_PW_P0 + pipe, &len, 1);
     return len;
 }
 
 uint8_t nrf24_set_packetlen(uint8_t len) {
-    if (len > MAX_PAYLOAD_SIZE) return 0;
+    if(len > MAX_PAYLOAD_SIZE || len < MIN_PAYLOAD_SIZE) return 0;
     uint8_t status = 0;
     status = nrf24_write_reg(RX_PW_P0, len);
     return status;
 }
 
-uint8_t nrf24_set_arc_ard(uint8_t arc, uint16_t ard)
-{
-    if (arc > MAX_ARC_SIZE) return 0;
-    if (ard < MIN_ARD_SIZE || ard > MAX_ARD_SIZE || ard % MIN_ARD_SIZE != 0) return 0;
+uint8_t nrf24_set_arc_ard(uint8_t arc, uint16_t ard) {
+    if(arc > MAX_ARC_SIZE) return 0;
+    if(ard < MIN_ARD_SIZE || ard > MAX_ARD_SIZE || ard % MIN_ARD_SIZE != 0) return 0;
     uint8_t status = 0;
     uint8_t ard_reg = (ard / MIN_ARD_SIZE) - 1;
     uint8_t re_tr = (ard_reg << 4) | (arc & 0x0f);
@@ -270,7 +283,7 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack) {
 
     memcpy(&tx[1], payload, size);
     nrf24_spi_trx(tx, rx, size + 1);
-    nrf24_set_tx_mode();
+    nrf24_set_mode(MODE_TX);
 
     uint32_t start_time = furi_get_tick();
     while(!(status & (TX_DS | MAX_RT)) && furi_get_tick() - start_time < 2000UL) {
@@ -279,7 +292,7 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack) {
 
     if(status & MAX_RT) nrf24_flush_tx();
 
-    nrf24_set_idle();
+    nrf24_set_mode(MODE_IDLE);
     nrf24_write_reg(REG_STATUS, TX_DS | MAX_RT);
     return status & TX_DS;
 }
@@ -327,65 +340,76 @@ uint8_t nrf24_set_mode(nrf24_mode mode) {
 }
 
 void nrf24_configure(NRF24L01_Config* config) {
+    uint8_t reg_feature;
+
     nrf24_set_mode(MODE_IDLE); // power down
-    nrf24_write_reg(REG_STATUS, 0x70); // clear interrupts
-    nrf24_write_reg(REG_CONFIG, 0x70); // Disable IRQ pin (not used in Flipper Zero)
+    nrf24_write_reg(REG_STATUS, 0x00); // clear interrupts
+    nrf24_write_reg(REG_FEATURE, 0x00); // clear features register
+    nrf24_write_reg(REG_CONFIG, 0x00); // Disable IRQ pin (not used in Flipper Zero)
 
     if(nrf24_get_chan() != config->channel) nrf24_set_chan(config->channel); // set channel
     if(nrf24_get_rate() != config->data_rate) nrf24_set_rate(config->data_rate); //set data rate
-    if(nrf24_get_txpower() != config->tx_power) nrf24_set_txpower(config->tx_power); // set transmit power
+    if(nrf24_get_txpower() != config->tx_power)
+        nrf24_set_txpower(config->tx_power); // set transmit power
 
-    if(config->crc_length != 0) nrf24_set_crc_lenght(config->crc_length); // CRC lenght 1 or 2 bytes
+    if(config->crc_length != 0)
+        nrf24_set_crc_lenght(config->crc_length); // CRC lenght 1 or 2 bytes
 
-    if(nrf24_get_maclen() != config->mac_len) nrf24_set_maclen(config->mac_len); // set adress width 3,4 or 5 bytes
+    if(nrf24_get_maclen() != config->mac_len)
+        nrf24_set_maclen(config->mac_len); // set adress width 2,3,4 or 5 bytes
 
-    if (config->ard > 0) nrf24_set_arc_ard(config->arc, config->ard); // set Auto retransmit count and Retransmit delay
+    if(config->ard > 0)
+        nrf24_set_arc_ard(
+            config->arc, config->ard); // set Auto retransmit count and Retransmit delay
 
-    if (config->auto_ack)
+    if(config->auto_ack) {
         nrf24_write_reg(REG_EN_AA, 0x3F); // Enable Shockburst
-    else
+        nrf24_set_crc(true); // enable CRC
+    } else
         nrf24_write_reg(REG_EN_AA, 0x00); // Disable Shockburst
 
-    if (config->dynamic_payload && config->auto_ack)
-    {
+    if(config->dynamic_payload && config->auto_ack) {
         nrf24_write_reg(REG_DYNPD, 0x3F); // enable dynamic payload length on all pipes
-    }
-    else
+        nrf24_write_reg(REG_FEATURE, 0x04); // enable dyn payload
+    } else {
         nrf24_write_reg(REG_DYNPD, 0x00); // disable dynamic payload length on all pipes
+    }
 
-    
+    if(config->ack_payload && config->dynamic_payload) {
+        nrf24_write_reg(REG_FEATURE, 0x06); // enable dyn payload and ack
+        if(config->ard < 500)
+            nrf24_set_arc_ard(config->arc, 500); // set ARD to at least 500µs according datasheet
+    }
 
-    if (config->ack_payload)
+    if(config->tx_no_ack) // enable "NO_ACK" flag on tx frames
     {
-
+        nrf24_read_reg(REG_FEATURE, &reg_feature, 1);
+        reg_feature |= 0x01;
+        nrf24_write_reg(REG_FEATURE, reg_feature);
     }
 
-    
-
-    if(noack)
-        nrf24_write_reg(REG_FEATURE, 0x05); // disable payload-with-ack, enable noack
-    else {
-        nrf24_write_reg(REG_CONFIG, 0x0C); // 2 byte CRC
-        nrf24_write_reg(REG_FEATURE, 0x07); // enable dyn payload and ack
-        nrf24_write_reg(REG_SETUP_RETR, 0x1f); // 15 retries for AA, 500us auto retransmit delay
-    }
-
-    nrf24_set_idle();
     nrf24_flush_rx();
     nrf24_flush_tx();
 
-    if(maclen) nrf24_set_maclen(maclen);
+    if(config->tx_addr) nrf24_set_tx_mac(config->tx_addr, config->mac_len); // set tx adress
 
-    if(srcmac) nrf24_set_src_mac(srcmac, maclen);
+    if(config->auto_ack) // set rx adress == tx adress if Enhanced ShockBurst enabled
+    {
+        uint8_t tx_addr[MAX_MAC_SIZE];
+        uint8_t size;
+        size = nrf24_get_tx_mac(tx_addr); // get current tx adress
+        nrf24_set_rx_mac(tx_addr, size);
+    } else if(config->rx_addr) {
+        nrf24_set_rx_mac(config->rx_addr, config->mac_len); // set rx adress for pipe 0
+    }
 
-    if(dstmac) nrf24_set_dst_mac(dstmac, maclen);
+    if (config->payload_size >= MIN_PAYLOAD_SIZE && config->payload_size <= MAX_PAYLOAD_SIZE)
+        nrf24_set_packetlen(config->payload_size); // set fix payload size for pipe 0
 
-    nrf24_write_reg(REG_RF_CH, channel);
-    nrf24_set_rate(rate);
     furi_delay_ms(200);
 }
 
-void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate) {
+/* void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate) {
     //uint8_t preamble[] = {0x55, 0x00}; // little endian
     uint8_t preamble[] = {0xAA, 0x00}; // little endian
     //uint8_t preamble[] = {0x00, 0x55}; // little endian
@@ -396,7 +420,7 @@ void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate) {
     nrf24_write_reg(REG_EN_AA, 0x00); // Disable Shockburst
     nrf24_write_reg(REG_FEATURE, 0x05); // disable payload-with-ack, enable noack
     nrf24_set_maclen(2); // shortest address
-    nrf24_set_src_mac(preamble, 2); // set src mac to preamble bits to catch everything
+    nrf24_set_rx_mac(preamble, 2); // set src mac to preamble bits to catch everything
     nrf24_set_packetlen(32); // set max packet length
     nrf24_set_idle();
     nrf24_flush_rx();
@@ -408,7 +432,7 @@ void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate) {
     nrf24_write_reg(REG_CONFIG, 0x03); // PWR_UP and PRIM_RX, disable AA and CRC
     furi_hal_gpio_write(nrf24_CE_PIN, true);
     furi_delay_ms(100);
-}
+} */
 
 void hexlify(uint8_t* in, uint8_t size, char* out) {
     memset(out, 0, size * 2);
@@ -544,7 +568,7 @@ bool nrf24_sniff_address(uint8_t maclen, uint8_t* address) {
     return found;
 }
 
-uint8_t nrf24_find_channel(
+/* uint8_t nrf24_find_channel(
     uint8_t* srcmac,
     uint8_t* dstmac,
     uint8_t maclen,
@@ -570,3 +594,4 @@ uint8_t nrf24_find_channel(
 
     return ch;
 }
+ */

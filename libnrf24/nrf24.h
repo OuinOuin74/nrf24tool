@@ -3,38 +3,37 @@
 #include <stdint.h>
 #include <furi_hal_spi.h>
 
-
-#define R_REGISTER 0x00
-#define W_REGISTER 0x20
-#define REGISTER_MASK 0x1F
-#define ACTIVATE 0x50
-#define R_RX_PL_WID 0x60
-#define R_RX_PAYLOAD 0x61
-#define W_TX_PAYLOAD 0xA0
+#define R_REGISTER         0x00
+#define W_REGISTER         0x20
+#define REGISTER_MASK      0x1F
+#define ACTIVATE           0x50
+#define R_RX_PL_WID        0x60
+#define R_RX_PAYLOAD       0x61
+#define W_TX_PAYLOAD       0xA0
 #define W_TX_PAYLOAD_NOACK 0xB0
-#define W_ACK_PAYLOAD 0xA8
-#define FLUSH_TX 0xE1
-#define FLUSH_RX 0xE2
-#define REUSE_TX_PL 0xE3
-#define RF24_NOP 0xFF
+#define W_ACK_PAYLOAD      0xA8
+#define FLUSH_TX           0xE1
+#define FLUSH_RX           0xE2
+#define REUSE_TX_PL        0xE3
+#define RF24_NOP           0xFF
 
-#define REG_CONFIG 0x00
-#define REG_EN_AA 0x01
-#define REG_EN_RXADDR 0x02
-#define REG_SETUP_AW 0x03
-#define REG_SETUP_RETR 0x04
-#define REG_DYNPD 0x1C
-#define REG_FEATURE 0x1D
-#define REG_RF_SETUP 0x06
-#define REG_STATUS 0x07
-#define REG_RX_ADDR_P0 0x0A
-#define REG_RX_ADDR_P1 0x0B
-#define REG_RX_ADDR_P2 0x0C
-#define REG_RX_ADDR_P3 0x0D
-#define REG_RX_ADDR_P4 0x0E
-#define REG_RX_ADDR_P5 0x0F
-#define REG_RF_CH 0x05
-#define REG_TX_ADDR 0x10
+#define REG_CONFIG      0x00
+#define REG_EN_AA       0x01
+#define REG_EN_RXADDR   0x02
+#define REG_SETUP_AW    0x03
+#define REG_SETUP_RETR  0x04
+#define REG_DYNPD       0x1C
+#define REG_FEATURE     0x1D
+#define REG_RF_SETUP    0x06
+#define REG_STATUS      0x07
+#define REG_RX_ADDR_P0  0x0A
+#define REG_RX_ADDR_P1  0x0B
+#define REG_RX_ADDR_P2  0x0C
+#define REG_RX_ADDR_P3  0x0D
+#define REG_RX_ADDR_P4  0x0E
+#define REG_RX_ADDR_P5  0x0F
+#define REG_RF_CH       0x05
+#define REG_TX_ADDR     0x10
 #define REG_FIFO_STATUS 0x17
 
 #define RX_PW_P0 0x11
@@ -47,29 +46,67 @@
 #define TX_DS    0x20
 #define MAX_RT   0x10
 
+#define MAX_CHANNEL      125
+#define MAX_PIPE         5
+#define MAX_PAYLOAD_SIZE 32
+#define MAX_CRC_LENGHT   2
+#define MAX_MAC_SIZE     5
+#define MIN_ARD_SIZE     250 // Auto Retransmit Delay in µs
+#define MAX_ARD_SIZE     4000 // Auto Retransmit Delay in µs
+#define MAX_ARC_SIZE     15 //Auto Retransmit Count
+
 #define nrf24_TIMEOUT 500
-#define nrf24_CE_PIN &gpio_ext_pb2
-#define nrf24_HANDLE furi_hal_spi_bus_handle_external
+#define nrf24_CE_PIN  &gpio_ext_pb2
+#define nrf24_HANDLE  furi_hal_spi_bus_handle_external
 
-typedef struct NRF24L01_Config 
-{
-    uint8_t channel;                // RF channel (0 - 125)
-    uint8_t data_rate;              // Transmission speed: 1 Mbps, 2 Mbps, 250 kbps
-    uint8_t tx_power;               // Transmission power: -18 dBm, -12 dBm, -6 dBm, 0 dBm
-    uint8_t crc_length;             // CRC length: 1 or 2 bytes
-    uint8_t address_width;          // Address width: 3, 4 or 5 bytes
-    uint8_t retransmit_count;       // Auto retransmit count (0-15)
-    uint8_t retransmit_delay;       // Retransmit delay (250 µs to 4000 µs)
-    uint8_t rf_power_mode;          // RF power mode: Power Down, Standby, RX, TX
-    bool dynamic_payload;           // Dynamic payload
-    bool auto_ack;                  // Auto ACK "Enhanced ShockBurst"
-    bool ack_payload;               // Return ACK + payload 
-    bool enable_crc;                // CRC enabled (forced enable if auto_ack enabled)
+uint8_t EMPTY_MAC[] = {0, 0, 0, 0, 0};
 
-    uint64_t tx_address;            // Transmission address
-    uint64_t rx_address;            // Reception address (pipe 0) (equal to tx_adress if auto_ack enabled)
+typedef enum {
+    DATA_RATE_1MBPS = 0, // 1 Mbps (default)
+    DATA_RATE_2MBPS, // 2 Mbps
+    DATA_RATE_250KBPS // 250 kbps
+} nrf24_data_rate;
 
-    uint8_t payload_size;           // Fixed payload size (1 to 32 bytes)
+typedef enum {
+    TX_POWER_M18DBM = 0, // -18 dBm (lowest power)
+    TX_POWER_M12DBM, // -12 dBm
+    TX_POWER_M6DBM, // -6 dBm
+    TX_POWER_0DBM // 0 dBm (highest power)
+} nrf24_tx_power;
+
+typedef enum {
+    MODE_IDLE = 0, // Power Down Mode (low power consumption)
+    MODE_STANDBY, // Standby Mode (ready to switch to TX or RX)
+    MODE_RX, // Receive Mode (listening for incoming data)
+    MODE_TX // Transmit Mode (sending data)
+} nrf24_mode;
+
+typedef enum {
+    ADDR_WIDTH_ILLEGAL = 0,
+    ADDR_WIDTH_3_BYTES,
+    ADDR_WIDTH_4_BYTES,
+    ADDR_WIDTH_5_BYTES
+} nrf24_addr_width;
+
+typedef struct NRF24L01_Config {
+    uint8_t channel;            // RF channel (0 - 125)
+    nrf24_data_rate data_rate;  // Transmission speed: 0 -> 1 Mbps, 1 -> 2 Mbps, 2 -> 250 kbps
+    nrf24_tx_power tx_power;    // Transmission power: 0-> -18 dBm, 1 -> -12 dBm, 2-> -6 dBm, 3-> 0 dBm
+    uint8_t crc_length;         // CRC length: 1 or 2 bytes
+    nrf24_addr_width mac_len;   // Address width: 3, 4 or 5 bytes
+    uint8_t arc;                // Auto retransmit count (0-15)
+    uint16_t ard;               // Retransmit delay (250 µs to 4000 µs)
+    uint8_t rf_power_mode;      // RF power mode: Power Down, Standby, RX, TX
+    bool auto_ack;              // Auto ACK aka "Enhanced ShockBurst"
+    bool dynamic_payload;       // Dynamic payload (require auto_ack)
+    bool ack_payload;           // Return ACK + payload (require dynamic payload)
+    bool no_ack;                // Disable 
+    bool enable_crc;            // CRC enabled (forced enable if auto_ack enabled)
+
+    uint8_t* tx_address;       // Transmission address
+    uint8_t* rx_address;       // Reception address (pipe 0) (equal to tx_adress if auto_ack enabled)
+
+    uint8_t payload_size; // Fixed payload size (1 to 32 bytes)
 } NRF24L01_Config;
 
 /* Low level API */
@@ -102,33 +139,16 @@ uint8_t nrf24_write_buf_reg(uint8_t reg, uint8_t* data, uint8_t size);
  */
 uint8_t nrf24_read_reg(uint8_t reg, uint8_t* data, uint8_t size);
 
-/** Power up the radio for operation
+/** Set the operational mode
  * 
- * 
+ * MODE_IDLE = 0,  Power Down Mode (low power consumption)
+ * MODE_STANDBY,   Standby Mode (ready to switch to TX or RX)
+ * MODE_RX,        Receive Mode (listening for incoming data)
+ * MODE_TX         ransmit Mode (sending data)
  * @return     device status
  */
-uint8_t nrf24_power_up();
 
-/** Power down the radio
- * 
- * 
- * @return     device status
- */
-uint8_t nrf24_set_idle();
-
-/** Sets the radio to RX mode
- *
- * 
- * @return     device status
- */
-uint8_t nrf24_set_rx_mode();
-
-/** Sets the radio to TX mode
- *
- * 
- * @return     device status
- */
-uint8_t nrf24_set_tx_mode();
+uint8_t nrf24_set_mode(nrf24_mode mode);
 
 /*=============================================================================================================*/
 
@@ -178,7 +198,7 @@ uint8_t nrf24_set_packetlen(uint8_t len);
  * 
  * @return     MAC address length
  */
-uint8_t nrf24_get_maclen();
+nrf24_addr_width nrf24_get_maclen();
 
 /** Sets configured length of MAC address
  *
@@ -186,7 +206,7 @@ uint8_t nrf24_get_maclen();
  * 
  * @return     MAC address length
  */
-uint8_t nrf24_set_maclen(uint8_t maclen);
+uint8_t nrf24_set_maclen(nrf24_addr_width maclen);
 
 /** Gets the current status flags from the STATUS register
  * 
@@ -281,17 +301,9 @@ uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* ret_packetsize, uint8_t packet_
 uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack);
 
 /** Configure the radio
- * This is not comprehensive, but covers a lot of the common configuration options that may be changed
- * @param      rate - transfer rate in kbps
- * @param      srcmac - source mac address
- * @param      dstmac - destination mac address
- * @param      maclen - length of mac address
- * @param      channel - channel to tune to
- * @param      noack - if true, disable auto-acknowledge
- * @param      disable_aa - if true, disable ShockBurst
- * 
+ * This is not comprehensive, but covers a lot of the common configuration options that may be changed 
  */
-void nrf24_configure(uint32_t rate, uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t channel, bool noack, bool disable_aa);
+void nrf24_configure(NRF24L01_Config* config);
 
 /** Configures the radio for "promiscuous mode" and primes it for rx
  * This is not an actual mode of the nrf24, but this function exploits a few bugs in the chip that allows it to act as if it were.
@@ -322,7 +334,14 @@ bool nrf24_sniff_address(uint8_t maclen, uint8_t* address);
  * 
  * @return     channel that the address is listening on, if this value is above the max_channel param, it failed
  */
-uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, uint8_t maclen, uint8_t rate, uint8_t min_channel, uint8_t max_channel, bool autoinit);
+uint8_t nrf24_find_channel(
+    uint8_t* srcmac,
+    uint8_t* dstmac,
+    uint8_t maclen,
+    uint8_t rate,
+    uint8_t min_channel,
+    uint8_t max_channel,
+    bool autoinit);
 
 /** Converts 64 bit value into uint8_t array
  * @param      val  - 64-bit integer

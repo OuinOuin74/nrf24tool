@@ -51,6 +51,27 @@
 #define nrf24_CE_PIN &gpio_ext_pb2
 #define nrf24_HANDLE furi_hal_spi_bus_handle_external
 
+typedef struct NRF24L01_Config 
+{
+    uint8_t channel;                // RF channel (0 - 125)
+    uint8_t data_rate;              // Transmission speed: 1 Mbps, 2 Mbps, 250 kbps
+    uint8_t tx_power;               // Transmission power: -18 dBm, -12 dBm, -6 dBm, 0 dBm
+    uint8_t crc_length;             // CRC length: 1 or 2 bytes
+    uint8_t address_width;          // Address width: 3, 4 or 5 bytes
+    uint8_t retransmit_count;       // Auto retransmit count (0-15)
+    uint8_t retransmit_delay;       // Retransmit delay (250 µs to 4000 µs)
+    uint8_t rf_power_mode;          // RF power mode: Power Down, Standby, RX, TX
+    bool dynamic_payload;           // Dynamic payload
+    bool auto_ack;                  // Auto ACK "Enhanced ShockBurst"
+    bool ack_payload;               // Return ACK + payload 
+    bool enable_crc;                // CRC enabled (forced enable if auto_ack enabled)
+
+    uint64_t tx_address;            // Transmission address
+    uint64_t rx_address;            // Reception address (pipe 0) (equal to tx_adress if auto_ack enabled)
+
+    uint8_t payload_size;           // Fixed payload size (1 to 32 bytes)
+} NRF24L01_Config;
+
 /* Low level API */
 
 /** Write device register

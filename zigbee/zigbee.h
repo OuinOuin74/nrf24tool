@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "libnrf24/nrf24.h" // Includes the nRF24 functions you provided earlier
-#include "nrf24scan.h"
+#include "nrf24tool.h"
 
 
 #define ZIGBEE_CHANNEL_MIN 11 // ZigBee channels start at 11

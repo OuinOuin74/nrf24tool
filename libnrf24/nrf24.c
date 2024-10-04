@@ -8,6 +8,24 @@
 
 uint8_t EMPTY_MAC[] = {0, 0, 0, 0, 0};
 
+NRF24L01_Config find_channel_config = {
+    .channel = 0,
+    .data_rate = DATA_RATE_2MBPS,
+    .tx_power = TX_POWER_0DBM,
+    .crc_length = 2,
+    .mac_len = ADDR_WIDTH_5_BYTES,
+    .arc = 1,
+    .ard = 500,
+    .auto_ack = true,
+    .dynamic_payload = true,
+    .ack_payload = false,
+    .tx_no_ack = false,
+    .enable_crc = true,
+    .tx_addr = NULL,
+    .rx_addr = NULL,
+    .payload_size = MAX_PAYLOAD_SIZE
+};
+
 char LOG_TAG[] = "libNRF24";
 
 void nrf24_init() {
@@ -78,13 +96,13 @@ nrf24_addr_width nrf24_get_maclen() {
     uint8_t maclen;
     nrf24_read_reg(REG_SETUP_AW, &maclen, 1);
     maclen &= 3;
-    return (nrf24_addr_width)maclen;
+    return (nrf24_addr_width)(maclen + 2);
 }
 
 uint8_t nrf24_set_maclen(nrf24_addr_width maclen) {
-    if(maclen > MAX_MAC_SIZE) return 0;
+    if(maclen < MIN_MAC_SIZE || maclen > MAX_MAC_SIZE) return 0;
     uint8_t status = 0;
-    status = nrf24_write_reg(REG_SETUP_AW, maclen);
+    status = nrf24_write_reg(REG_SETUP_AW, maclen - 2);
     return status;
 }
 
@@ -176,33 +194,32 @@ uint8_t nrf24_set_crc(bool enable) {
     return status;
 }
 
-uint8_t nrf24_get_rx_mac(uint8_t* mac) {
-    uint8_t size = 0;
-    size = nrf24_get_maclen();
+nrf24_addr_width nrf24_get_rx_mac(uint8_t* mac) {
+    nrf24_addr_width size = nrf24_get_maclen();
     nrf24_read_reg(REG_RX_ADDR_P0, mac, size);
     return size;
 }
 
-uint8_t nrf24_set_rx_mac(uint8_t* mac, uint8_t size) {
+uint8_t nrf24_set_rx_mac(uint8_t* mac, nrf24_addr_width size) {
+    if (size < MIN_MAC_SIZE || size > MAX_MAC_SIZE) return 0;
     uint8_t status = 0;
     nrf24_set_maclen(size);
-    nrf24_write_buf_reg(REG_RX_ADDR_P0, EMPTY_MAC, 5);
+    nrf24_write_buf_reg(REG_RX_ADDR_P0, EMPTY_MAC, MAX_MAC_SIZE);
     status = nrf24_write_buf_reg(REG_RX_ADDR_P0, mac, size);
     return status;
 }
 
-uint8_t nrf24_get_tx_mac(uint8_t* mac) {
-    uint8_t size = 0;
-    uint8_t status = 0;
-    size = nrf24_get_maclen();
-    status = nrf24_read_reg(REG_TX_ADDR, mac, size);
-    return status;
+nrf24_addr_width nrf24_get_tx_mac(uint8_t* mac) {
+    uint8_t size = nrf24_get_maclen();
+    nrf24_read_reg(REG_TX_ADDR, mac, size);
+    return size;
 }
 
-uint8_t nrf24_set_tx_mac(uint8_t* mac, uint8_t size) {
+uint8_t nrf24_set_tx_mac(uint8_t* mac, nrf24_addr_width size) {
+    if (size < MIN_MAC_SIZE || size > MAX_MAC_SIZE) return 0;
     uint8_t status = 0;
     nrf24_set_maclen(size);
-    nrf24_write_buf_reg(REG_TX_ADDR, EMPTY_MAC, 5);
+    nrf24_write_buf_reg(REG_TX_ADDR, EMPTY_MAC, MAX_MAC_SIZE);
     status = nrf24_write_buf_reg(REG_TX_ADDR, mac, size);
     return status;
 }
@@ -231,40 +248,34 @@ uint8_t nrf24_set_arc_ard(uint8_t arc, uint16_t ard) {
     return status;
 }
 
-uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* ret_packetsize, uint8_t packet_size) {
+uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full) {
     uint8_t status = 0;
+    uint8_t size = 0;
+    uint8_t tx_pl_wid[] = {R_RX_PL_WID, 0};
+    uint8_t rx_pl_wid[] = {0, 0};
     uint8_t tx_cmd[33] = {0}; // 32 max payload size + 1 for command
     uint8_t tmp_packet[33] = {0};
 
     status = nrf24_status();
 
-    if(!(status & RX_DR)) {
-        tx_cmd[0] = R_REGISTER | (REGISTER_MASK & REG_FIFO_STATUS);
-        nrf24_spi_trx(tx_cmd, tmp_packet, 2);
-        if((tmp_packet[1] & 1) == 0) status |= RX_DR; // packet in FIFO buffer
-    }
     if(status & RX_DR) {
-        if(packet_size == 1)
-            packet_size = nrf24_get_packetlen((status >> 1) & 0x07);
-        else if(packet_size == 0) {
-            tx_cmd[0] = R_RX_PL_WID;
-            tx_cmd[1] = 0;
-            nrf24_spi_trx(tx_cmd, tmp_packet, 2);
-            packet_size = tmp_packet[1];
+        if(full)
+            size = nrf24_get_packetlen(0);
+        else {
+            nrf24_spi_trx(tx_pl_wid, rx_pl_wid, 2);
+            size = rx_pl_wid[1];
         }
-        if(packet_size > 32 || packet_size == 0) packet_size = 32;
 
         tx_cmd[0] = R_RX_PAYLOAD;
-        tx_cmd[1] = 0;
-        nrf24_spi_trx(tx_cmd, tmp_packet, packet_size + 1);
-        memcpy(packet, &tmp_packet[1], packet_size);
-        nrf24_write_reg(REG_STATUS, RX_DR); // clear RX_DR
-    } else if(status & (TX_DS | MAX_RT)) // MAX_RT, TX_DS
-    {
-        nrf24_write_reg(REG_STATUS, TX_DS | MAX_RT); // clear RX_DR, MAX_RT.
+        nrf24_spi_trx(tx_cmd, tmp_packet, size + 1);
+        nrf24_write_reg(REG_STATUS, RX_DR); // clear bit.
+        memcpy(packet, &tmp_packet[1], size);
+    } else if(status == 0) {
+        nrf24_flush_rx();
+        nrf24_write_reg(REG_STATUS, RX_DR); // clear bit.
     }
 
-    *ret_packetsize = packet_size;
+    if (size != 0) *packetsize = size;
     return status;
 }
 
@@ -285,10 +296,7 @@ uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack) {
     nrf24_spi_trx(tx, rx, size + 1);
     nrf24_set_mode(MODE_TX);
 
-    uint32_t start_time = furi_get_tick();
-    while(!(status & (TX_DS | MAX_RT)) && furi_get_tick() - start_time < 2000UL) {
-        status = nrf24_status();
-    }
+    while(!(status & (TX_DS | MAX_RT))) status = nrf24_status();
 
     if(status & MAX_RT) nrf24_flush_tx();
 
@@ -307,13 +315,14 @@ uint8_t nrf24_set_mode(nrf24_mode mode) {
         cfg &= 0xfc; // clear bottom two bits to power down the radio
         status = nrf24_write_reg(REG_CONFIG, cfg);
         furi_hal_gpio_write(nrf24_CE_PIN, false);
+        furi_delay_ms(2);
         break;
 
     case MODE_STANDBY:
         cfg |= 0x02; // PWR_UP
         status = nrf24_write_reg(REG_CONFIG, cfg);
         furi_hal_gpio_write(nrf24_CE_PIN, true);
-        furi_delay_ms(50);
+        furi_delay_ms(2);
         break;
 
     case MODE_RX:
@@ -322,7 +331,7 @@ uint8_t nrf24_set_mode(nrf24_mode mode) {
         cfg |= 0x03; // PWR_UP, and PRIM_RX
         status = nrf24_write_reg(REG_CONFIG, cfg);
         furi_hal_gpio_write(nrf24_CE_PIN, true);
-        furi_delay_ms(50);
+        furi_delay_ms(20);
         break;
 
     case MODE_TX:
@@ -332,7 +341,7 @@ uint8_t nrf24_set_mode(nrf24_mode mode) {
         cfg |= 0x02; // PWR_UP
         status = nrf24_write_reg(REG_CONFIG, cfg);
         furi_hal_gpio_write(nrf24_CE_PIN, true);
-        furi_delay_ms(50);
+        furi_delay_ms(2);
         break;
     }
 
@@ -343,10 +352,10 @@ void nrf24_configure(NRF24L01_Config* config) {
     uint8_t reg_feature;
 
     nrf24_set_mode(MODE_IDLE); // power down
-    nrf24_write_reg(REG_STATUS, 0x00); // clear interrupts
+    nrf24_write_reg(REG_CONFIG, 0x00); // Stop nRF
+    nrf24_write_reg(REG_STATUS, 0x70); // clear interrupts
     nrf24_write_reg(REG_FEATURE, 0x00); // clear features register
-    nrf24_write_reg(REG_CONFIG, 0x00); // Disable IRQ pin (not used in Flipper Zero)
-
+    
     if(nrf24_get_chan() != config->channel) nrf24_set_chan(config->channel); // set channel
     if(nrf24_get_rate() != config->data_rate) nrf24_set_rate(config->data_rate); //set data rate
     if(nrf24_get_txpower() != config->tx_power)
@@ -368,14 +377,17 @@ void nrf24_configure(NRF24L01_Config* config) {
     } else
         nrf24_write_reg(REG_EN_AA, 0x00); // Disable Shockburst
 
-    if(config->dynamic_payload && config->auto_ack) {
-        nrf24_write_reg(REG_DYNPD, 0x3F); // enable dynamic payload length on all pipes
+    if(config->dynamic_payload) {
         nrf24_write_reg(REG_FEATURE, 0x04); // enable dyn payload
+        if (config->auto_ack)
+            nrf24_write_reg(REG_DYNPD, 0x3F); // enable dynamic payload length on all pipes
+        else
+            nrf24_write_reg(REG_DYNPD, 0x00); // disable dynamic payload length on all pipes
     } else {
         nrf24_write_reg(REG_DYNPD, 0x00); // disable dynamic payload length on all pipes
     }
 
-    if(config->ack_payload && config->dynamic_payload) {
+    if(config->ack_payload) {
         nrf24_write_reg(REG_FEATURE, 0x06); // enable dyn payload and ack
         if(config->ard < 500)
             nrf24_set_arc_ard(config->arc, 500); // set ARD to at least 500µs according datasheet
@@ -390,6 +402,9 @@ void nrf24_configure(NRF24L01_Config* config) {
 
     nrf24_flush_rx();
     nrf24_flush_tx();
+
+    if (config->enable_crc) nrf24_set_crc(true); // enable CRC
+    else if (!config->auto_ack) nrf24_set_crc(false); // disable CRC
 
     if(config->tx_addr) nrf24_set_tx_mac(config->tx_addr, config->mac_len); // set tx adress
 
@@ -409,7 +424,7 @@ void nrf24_configure(NRF24L01_Config* config) {
     furi_delay_ms(200);
 }
 
-/* void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate) {
+void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate) {
     //uint8_t preamble[] = {0x55, 0x00}; // little endian
     uint8_t preamble[] = {0xAA, 0x00}; // little endian
     //uint8_t preamble[] = {0x00, 0x55}; // little endian
@@ -422,7 +437,7 @@ void nrf24_configure(NRF24L01_Config* config) {
     nrf24_set_maclen(2); // shortest address
     nrf24_set_rx_mac(preamble, 2); // set src mac to preamble bits to catch everything
     nrf24_set_packetlen(32); // set max packet length
-    nrf24_set_idle();
+    nrf24_set_mode(MODE_IDLE);
     nrf24_flush_rx();
     nrf24_flush_tx();
     nrf24_write_reg(REG_RF_CH, channel);
@@ -432,7 +447,7 @@ void nrf24_configure(NRF24L01_Config* config) {
     nrf24_write_reg(REG_CONFIG, 0x03); // PWR_UP and PRIM_RX, disable AA and CRC
     furi_hal_gpio_write(nrf24_CE_PIN, true);
     furi_delay_ms(100);
-} */
+}
 
 void hexlify(uint8_t* in, uint8_t size, char* out) {
     memset(out, 0, size * 2);
@@ -531,67 +546,56 @@ void alt_address_old(uint8_t* packet, uint8_t* altaddr) {
 }
 
 bool validate_address(uint8_t* addr) {
-    uint8_t bad[][3] = {{0x55, 0x55}, {0xAA, 0xAA}, {0x00, 0x00}, {0xFF, 0xFF}};
-    for(int i = 0; i < 4; i++) {
-        for(int j = 0; j < 2; j++) {
-            if(!memcmp(addr + j * 2, bad[i], 2)) return false;
+    uint16_t bad[] = {0x5555, 0xAAAA, 0x0000, 0xFFFF};
+    uint16_t* addr16 = (uint16_t*) addr;
+
+    for (int i = 0; i < 4; i++) {
+        if (addr16[0] == bad[i] || addr16[1] == bad[i]) {
+            return false;
         }
     }
     return true;
 }
 
 bool nrf24_sniff_address(uint8_t maclen, uint8_t* address) {
-    bool found = false;
     uint8_t packet[32] = {0};
     uint8_t packetsize;
     //char printit[65];
     uint8_t status = 0;
     status = nrf24_rxpacket(packet, &packetsize, true);
-    if(status & 0x40) {
+    if(status & RX_DR) {
         if(validate_address(packet)) {
-            for(int i = 0; i < maclen; i++) {
-                address[i] = packet[maclen - 1 - i];
-            }
-            /*
-            alt_address(packet, packet);
-
-            for(i = 0; i < maclen; i++)
-                address[i + 5] = packet[maclen - 1 - i];
-            */
-
-            //memcpy(address, packet, maclen);
-            //hexlify(packet, packetsize, printit);
-            found = true;
+            for(int i = 0; i < maclen; i++) address[i] = packet[maclen - 1 - i];
+            return true;
         }
     }
-
-    return found;
+    return false;
 }
 
-/* uint8_t nrf24_find_channel(
-    uint8_t* srcmac,
-    uint8_t* dstmac,
-    uint8_t maclen,
-    uint8_t rate,
-    uint8_t min_channel,
-    uint8_t max_channel,
-    bool autoinit) {
+uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, nrf24_addr_width maclen, nrf24_data_rate rate, uint8_t min_channel, uint8_t max_channel, bool autoinit) {
     uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f}; // this can be anything, we just need an ack
     uint8_t ch = max_channel + 1; // means fail
+  
+    find_channel_config.data_rate = rate;
+    find_channel_config.rx_addr = srcmac;
+    find_channel_config.tx_addr = dstmac;
+    find_channel_config.mac_len = maclen;
+    find_channel_config.channel = min_channel;
 
-    nrf24_configure(rate, srcmac, dstmac, maclen, 2, false, false);
+    nrf24_configure(&find_channel_config);
 
     for(ch = min_channel; ch <= max_channel + 1; ch++) {
+        //nrf24_set_chan(ch);
         nrf24_write_reg(REG_RF_CH, ch);
         if(nrf24_txpacket(ping_packet, 4, true)) break;
     }
 
     if(autoinit) {
         FURI_LOG_D("nrf24", "initializing radio for channel %d", ch);
-        nrf24_configure(rate, srcmac, dstmac, maclen, ch, false, false);
+        find_channel_config.channel = ch;
+        nrf24_configure(&find_channel_config);
         return ch;
     }
 
     return ch;
 }
- */

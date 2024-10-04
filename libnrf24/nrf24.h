@@ -51,6 +51,7 @@
 #define MIN_PAYLOAD_SIZE 1
 #define MAX_PAYLOAD_SIZE 32
 #define MAX_CRC_LENGHT   2
+#define MIN_MAC_SIZE     2
 #define MAX_MAC_SIZE     5
 #define MIN_ARD_SIZE     250 // Auto Retransmit Delay in µs
 #define MAX_ARD_SIZE     4000 // Auto Retransmit Delay in µs
@@ -60,32 +61,32 @@
 #define nrf24_CE_PIN  &gpio_ext_pb2
 #define nrf24_HANDLE  furi_hal_spi_bus_handle_external
 
-typedef enum {
-    DATA_RATE_1MBPS = 0, // 1 Mbps (default)
-    DATA_RATE_2MBPS, // 2 Mbps
-    DATA_RATE_250KBPS // 250 kbps
-} nrf24_data_rate;
+// Data rate options
+#define DATA_RATE_1MBPS ((uint8_t)0) // 1 Mbps (default)
+#define DATA_RATE_2MBPS ((uint8_t)1) // 2 Mbps
+#define DATA_RATE_250KBPS ((uint8_t)2) // 250 kbps
+typedef uint8_t nrf24_data_rate;
 
-typedef enum {
-    TX_POWER_M18DBM = 0, // -18 dBm (lowest power)
-    TX_POWER_M12DBM, // -12 dBm
-    TX_POWER_M6DBM, // -6 dBm
-    TX_POWER_0DBM // 0 dBm (highest power)
-} nrf24_tx_power;
+// Transmission power levels
+#define TX_POWER_M18DBM ((uint8_t)0) // -18 dBm (lowest power)
+#define TX_POWER_M12DBM ((uint8_t)1) // -12 dBm
+#define TX_POWER_M6DBM ((uint8_t)2) // -6 dBm
+#define TX_POWER_0DBM ((uint8_t)3) // 0 dBm (highest power)
+typedef uint8_t nrf24_tx_power;
 
-typedef enum {
-    MODE_IDLE = 0, // Power Down Mode (low power consumption)
-    MODE_STANDBY, // Standby Mode (ready to switch to TX or RX)
-    MODE_RX, // Receive Mode (listening for incoming data)
-    MODE_TX // Transmit Mode (sending data)
-} nrf24_mode;
+// Operating modes
+#define MODE_IDLE ((uint8_t)0) // Power Down Mode (low power consumption)
+#define MODE_STANDBY ((uint8_t)1) // Standby Mode (ready to switch to TX or RX)
+#define MODE_RX ((uint8_t)2) // Receive Mode (listening for incoming data)
+#define MODE_TX ((uint8_t)3) // Transmit Mode (sending data)
+typedef uint8_t nrf24_mode;
 
-typedef enum {
-    ADDR_WIDTH_2_BYTES = 0,
-    ADDR_WIDTH_3_BYTES,
-    ADDR_WIDTH_4_BYTES,
-    ADDR_WIDTH_5_BYTES
-} nrf24_addr_width;
+// Mac address size
+#define ADDR_WIDTH_2_BYTES ((uint8_t)2)
+#define ADDR_WIDTH_3_BYTES ((uint8_t)3)
+#define ADDR_WIDTH_4_BYTES ((uint8_t)4)
+#define ADDR_WIDTH_5_BYTES ((uint8_t)5)
+typedef uint8_t nrf24_addr_width;
 
 typedef struct NRF24L01_Config {
     uint8_t channel; // RF channel (0 - 125)
@@ -281,12 +282,12 @@ uint8_t nrf24_set_tx_mac(uint8_t* mac, uint8_t size);
 /** Reads RX packet
  *
  * @param[out] packet - the packet contents
- * @param[out] ret_packetsize - size of the received packet
- * @param      packet_size: >1 - size, 1 - packet length is determined by RX_PW_P0 register, 0 - it is determined by dynamic payload length command
+ * @param[out] packetsize - size of the received packet
+ * @param      full - boolean set to true, packet length is determined by RX_PW_P0 register, false it is determined by dynamic payload length command
  * 
  * @return     device status
  */
-uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* ret_packetsize, uint8_t packet_size);
+uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full);
 
 /** Sends TX packet
  *

@@ -14,8 +14,8 @@ NRF24L01_Config find_channel_config = {
     .tx_power = TX_POWER_0DBM,
     .crc_length = 2,
     .mac_len = ADDR_WIDTH_5_BYTES,
-    .arc = 1,
-    .ard = 500,
+    .arc = 3,
+    .ard = 250,
     .auto_ack = true,
     .dynamic_payload = true,
     .ack_payload = false,
@@ -562,19 +562,24 @@ bool nrf24_sniff_address(uint8_t maclen, uint8_t* address) {
     uint8_t packetsize;
     //char printit[65];
     uint8_t status = 0;
+    uint8_t rpd_value;
     status = nrf24_rxpacket(packet, &packetsize, true);
     if(status & RX_DR) {
-        if(validate_address(packet)) {
-            for(int i = 0; i < maclen; i++) address[i] = packet[maclen - 1 - i];
-            return true;
+        nrf24_read_reg(REG_RPD, &rpd_value, 1);
+        if(rpd_value & 0x01) {
+            if(validate_address(packet)) {
+                for(int i = 0; i < maclen; i++)
+                    address[i] = packet[maclen - 1 - i];
+                return true;
+            }
         }
     }
     return false;
 }
 
 uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, nrf24_addr_width maclen, nrf24_data_rate rate, uint8_t min_channel, uint8_t max_channel, bool autoinit) {
-    uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f}; // this can be anything, we just need an ack
-    uint8_t ch = max_channel + 1; // means fail
+    uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f}; // Constante pour le paquet de ping
+    uint8_t ch;
   
     find_channel_config.data_rate = rate;
     find_channel_config.rx_addr = srcmac;
@@ -584,18 +589,17 @@ uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, nrf24_addr_width ma
 
     nrf24_configure(&find_channel_config);
 
-    for(ch = min_channel; ch <= max_channel + 1; ch++) {
-        //nrf24_set_chan(ch);
+    for(ch = min_channel; ch <= max_channel; ch++) {
         nrf24_write_reg(REG_RF_CH, ch);
-        if(nrf24_txpacket(ping_packet, 4, true)) break;
+        if(nrf24_txpacket(ping_packet, 4, true)) {
+            if(autoinit) {
+                FURI_LOG_D("nrf24", "initialisation radio pour le canal %d", ch);
+                find_channel_config.channel = ch;
+                nrf24_configure(&find_channel_config);
+            }
+            return ch;
+        }
     }
 
-    if(autoinit) {
-        FURI_LOG_D("nrf24", "initializing radio for channel %d", ch);
-        find_channel_config.channel = ch;
-        nrf24_configure(&find_channel_config);
-        return ch;
-    }
-
-    return ch;
+    return max_channel + 1; // Échec
 }

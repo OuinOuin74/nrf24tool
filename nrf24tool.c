@@ -8,6 +8,7 @@
 #define MAX_ADDRS            100
 #define MAX_CONFIRMED        32
 #define LOGITECH_MAX_CHANNEL 85
+#define LOGITECH_MIN_CHANNEL 28
 #define COUNT_THRESHOLD      2
 
 uint8_t preamble[] = {0xAA, 0x00};
@@ -22,15 +23,15 @@ char top_address[12];
 nrf24_data_rate target_rate = DATA_RATE_2MBPS; // rate can be either 8 (2Mbps) or 0 (1Mbps)
 
 NRF24L01_Config sniff = {
-    .channel = 0,
-    .data_rate = DATA_RATE_1MBPS,
+    .channel = LOGITECH_MIN_CHANNEL,
+    .data_rate = DATA_RATE_2MBPS,
     .tx_power = TX_POWER_0DBM,
     .crc_length = 0,
     .mac_len = ADDR_WIDTH_2_BYTES,
-    .arc = 0,
+    .arc = 15,
     .ard = 250,
     .auto_ack = false,
-    .dynamic_payload = false,
+    .dynamic_payload = true,
     .ack_payload = false,
     .tx_no_ack = true,
     .enable_crc = false,
@@ -64,11 +65,24 @@ void input_callback(InputEvent* input_event, void* context) {
     }
 }
 
-static void hexlify(uint8_t* in, uint8_t size, char* out) {
+/* static void hexlify(uint8_t* in, uint8_t size, char* out) {
     memset(out, 0, size * 2);
     for(int i = 0; i < size; i++)
         snprintf(out + strlen(out), sizeof(out + strlen(out)), "%02X", in[i]);
 }
+ */
+
+static void hexlify(uint8_t* in, uint8_t size, char* out) {
+    const char hex_digits[] = "0123456789ABCDEF";
+    
+    for (int i = 0; i < size; i++) {
+        out[i * 2] = hex_digits[(in[i] >> 4) & 0x0F];
+        out[i * 2 + 1] = hex_digits[in[i] & 0x0F];
+    }
+    
+    out[size * 2] = '\0';  // Fin de chaîne
+}
+
 
 static int get_addr_index(uint8_t* addr, uint8_t addr_size) {
     for(uint32_t i = 0; i < total_candidates; i++) {
@@ -154,6 +168,7 @@ static void wrap_up() {
 
     while(true) {
         idx = get_highest_idx();
+        FURI_LOG_I(LOG_TAG, "Nombre de détections pour cette adresse : %lu", counts[idx]);
         if(counts[idx] < COUNT_THRESHOLD) break;
 
         counts[idx] = 0;
@@ -174,6 +189,7 @@ static void wrap_up() {
         if(ch <= LOGITECH_MAX_CHANNEL) {
             hexlify(addr, 5, top_address);
             FURI_LOG_I(LOG_TAG, "Address found ! : %s",top_address);
+            furi_crash();
             if(confirmed_idx < MAX_CONFIRMED) memcpy(confirmed[confirmed_idx++], addr, 5);
             break;
         }
@@ -191,7 +207,7 @@ int32_t nrf24tool_app(void* p)
     nrf24_init();
     FURI_LOG_I(LOG_TAG, "NFR24 status : %d", nrf24_status());
     //nrf24_set_chan(11);
-    uint8_t target_channel = 0;
+    uint8_t target_channel = LOGITECH_MIN_CHANNEL;
     sniff.channel = target_channel;
     nrf24_configure(&sniff);
     //nrf24_init_promisc_mode(target_channel, 8);
@@ -218,20 +234,25 @@ int32_t nrf24tool_app(void* p)
             uint8_t* top_addr;
             if(!previously_confirmed(address)) {
                 idx = get_addr_index(address, 5);
+                hexlify(address, 5, top_address);
+                FURI_LOG_I(LOG_TAG, "address finded : %s", top_address);
                 if(idx == -1)
                     insert_addr(address, 5);
                 else
+                {
                     counts[idx]++;
+                    FURI_LOG_I(LOG_TAG, "address count : %ld", counts[idx]);
+                }
 
                 top_addr = candidates[get_highest_idx()];
                 hexlify(top_addr, 5, top_address);
-                FURI_LOG_I(LOG_TAG, "top address : %s", top_address);
+                //FURI_LOG_I(LOG_TAG, "top address : %s", top_address);
             }
         }
 
-        if(furi_get_tick() - start >= 2000) {
+        if(furi_get_tick() - start >= 4000) {
             target_channel++;
-            if(target_channel > LOGITECH_MAX_CHANNEL) target_channel = 2;
+            if(target_channel > LOGITECH_MAX_CHANNEL) target_channel = LOGITECH_MIN_CHANNEL;
 
             wrap_up();
             sniff.channel = target_channel;

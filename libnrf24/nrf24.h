@@ -35,6 +35,7 @@
 #define REG_RF_CH       0x05
 #define REG_TX_ADDR     0x10
 #define REG_FIFO_STATUS 0x17
+#define REG_RPD         0x09
 
 #define RX_PW_P0 0x11
 #define RX_PW_P1 0x12

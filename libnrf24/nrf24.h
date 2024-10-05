@@ -49,9 +49,10 @@
 
 #define MAX_CHANNEL      125
 #define MAX_PIPE         5
+#define PIPE_QTY         6
 #define MIN_PAYLOAD_SIZE 1
 #define MAX_PAYLOAD_SIZE 32
-#define MAX_CRC_LENGHT   2
+#define MAX_CRC_LENGTH   2
 #define MIN_MAC_SIZE     2
 #define MAX_MAC_SIZE     5
 #define MIN_ARD_SIZE     250 // Auto Retransmit Delay in µs
@@ -90,24 +91,27 @@ typedef uint8_t nrf24_mode;
 typedef uint8_t nrf24_addr_width;
 
 typedef struct NRF24L01_Config {
-    uint8_t channel; // RF channel (0 - 125)
-    nrf24_data_rate data_rate; // Transmission speed: 0 -> 1 Mbps, 1 -> 2 Mbps, 2 -> 250 kbps
-    nrf24_tx_power tx_power; // Transmission power: 0-> -18 dBm, 1 -> -12 dBm, 2-> -6 dBm, 3-> 0 dBm
-    uint8_t crc_length; // CRC length: 1 or 2 bytes
-    nrf24_addr_width mac_len; // Address width: 3, 4 or 5 bytes
-    uint8_t arc; // Auto retransmit count (0-15)
-    uint16_t ard; // Retransmit delay (250 µs to 4000 µs)
-    bool auto_ack; // Auto ACK aka "Enhanced ShockBurst"
-    bool dynamic_payload; // Dynamic payload (require auto_ack)
-    bool ack_payload; // Return ACK + payload (require dynamic payload)
-    bool tx_no_ack; // Send "NO_ACK" flag with transmission
-    bool enable_crc; // CRC enabled (forced enable if auto_ack enabled)
+    uint8_t channel;                // RF channel (0 - 125)
+    nrf24_data_rate data_rate;      // Transmission speed: 0 -> 1 Mbps, 1 -> 2 Mbps, 2 -> 250 kbps
+    nrf24_tx_power tx_power;        // Transmission power: 0 -> -18 dBm, 1 -> -12 dBm, 2 -> -6 dBm, 3 -> 0 dBm
+    uint8_t crc_length;             // CRC length: 1 or 2 bytes 0 -> disable CRC
+    nrf24_addr_width mac_len;       // Address width: 2, 3, 4, or 5 bytes
+    uint8_t arc;                    // Auto retransmit count (0-15)
+    uint16_t ard;                   // Retransmit delay (250 µs to 4000 µs)
+    bool auto_ack;                  // Auto ACK aka "Enhanced ShockBurst"
+    bool dynamic_payload;           // Dynamic payload (requires auto_ack)
+    bool ack_payload;               // Return ACK + payload (requires dynamic payload)
+    bool tx_no_ack;                 // Send "NO_ACK" flag with transmission
 
-    uint8_t* tx_addr; // Transmission address
-    uint8_t* rx_addr; // Reception address (pipe 0) (equal to tx_adress if auto_ack enabled)
+    // Transmission and reception addresses
+    uint8_t* tx_addr;               // Transmission address (TX address)
 
-    uint8_t payload_size; // Fixed payload size (1 to 32 bytes) (unset if dynamic_payload is enabled)
+    // Reception addresses for pipes 0 to 5
+    uint8_t* rx_addr[PIPE_QTY];     // Array to store full addresses for pipes 0 and 1, and only last byte for pipes 2 to 5
+
+    uint8_t payload_size;           // Fixed payload size (1 to 32 bytes) (unset if dynamic_payload is enabled)
 } NRF24L01_Config;
+
 
 /* Low level API */
 
@@ -249,19 +253,21 @@ uint8_t nrf24_set_chan(uint8_t chan);
 /** Gets the source mac address
  *
  * @param[out] mac - the source mac address
+ * @param      pipe - the pipe number (0 to 5)
  * 
  * @return     device status
  */
-uint8_t nrf24_get_rx_mac(uint8_t* mac);
+nrf24_addr_width nrf24_get_rx_mac(uint8_t* mac, uint8_t pipe);
 
 /** Sets the source mac address
  *
  * @param      mac - the mac address to set
  * @param      size - the size of the mac address (2 to 5)
+ * @param      pipe - the pipe number (0 to 5)
  * 
  * @return     device status
  */
-uint8_t nrf24_set_rx_mac(uint8_t* mac, uint8_t size);
+uint8_t nrf24_set_rx_mac(uint8_t* mac, nrf24_addr_width size, uint8_t pipe);
 
 /** Gets the dest mac address
  *
@@ -298,7 +304,7 @@ uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full);
  * 
  * @return     device status
  */
-uint8_t nrf24_txpacket(uint8_t* payload, uint8_t size, bool ack);
+bool nrf24_txpacket(uint8_t* payload, uint8_t size, bool no_ack);
 
 /** Configure the radio
  * This is not comprehensive, but covers a lot of the common configuration options that may be changed 

@@ -7,11 +7,11 @@
 
 #define MAX_ADDRS            100
 #define MAX_CONFIRMED        32
-#define LOGITECH_MAX_CHANNEL 85
-#define LOGITECH_MIN_CHANNEL 28
+#define LOGITECH_MAX_CHANNEL 78
+#define LOGITECH_MIN_CHANNEL 2
 #define COUNT_THRESHOLD      2
 
-uint8_t preamble[] = {0xAA, 0x00};
+uint8_t preamble1[] = {0xAA, 0x00};
 
 uint8_t candidates[MAX_ADDRS][5] = {0}; // last 100 sniffed addresses
 uint32_t counts[MAX_ADDRS];
@@ -20,7 +20,7 @@ uint8_t confirmed_idx = 0;
 uint32_t total_candidates = 0;
 uint32_t candidate_idx = 0;
 char top_address[12];
-nrf24_data_rate target_rate = DATA_RATE_2MBPS; // rate can be either 8 (2Mbps) or 0 (1Mbps)
+nrf24_data_rate target_rate = DATA_RATE_2MBPS;
 
 NRF24L01_Config sniff = {
     .channel = LOGITECH_MIN_CHANNEL,
@@ -34,9 +34,8 @@ NRF24L01_Config sniff = {
     .dynamic_payload = true,
     .ack_payload = false,
     .tx_no_ack = true,
-    .enable_crc = false,
     .tx_addr = NULL,
-    .rx_addr = preamble,
+    .rx_addr = {preamble1, NULL, NULL, NULL, NULL, NULL},
     .payload_size = MAX_PAYLOAD_SIZE
 };
 

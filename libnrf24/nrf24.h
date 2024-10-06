@@ -322,12 +322,11 @@ void nrf24_init_promisc_mode(uint8_t channel, uint8_t rate);
 
 /** Listens for a packet and returns first possible address sniffed
  * Call this only after calling nrf24_init_promisc_mode
- * @param      maclen - length of target mac address
  * @param[out] addresses - sniffed address
  * 
  * @return     success
  */
-bool nrf24_sniff_address(uint8_t maclen, uint8_t* address);
+bool nrf24_sniff_address(uint8_t* address);
 
 /** Sends ping packet on each channel for designated tx mac looking for ack
  * 

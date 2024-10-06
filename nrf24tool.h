@@ -17,4 +17,6 @@ typedef struct
     FuriMessageQueue* event_queue;
 } NRF24scanContext;
 
+void hexlify(uint8_t* in, uint8_t size, char* out);
+
 #endif

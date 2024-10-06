@@ -512,7 +512,7 @@ bool validate_address(uint8_t* addr) {
     return true;
 }
 
-bool nrf24_sniff_address(uint8_t maclen, uint8_t* address) {
+bool nrf24_sniff_address(uint8_t* address) {
     uint8_t packet[32] = {0};
     uint8_t packetsize;
     //char printit[65];
@@ -523,8 +523,8 @@ bool nrf24_sniff_address(uint8_t maclen, uint8_t* address) {
         nrf24_read_reg(REG_RPD, &rpd_value, 1);
         if(rpd_value & 0x01) {
             if(validate_address(packet)) {
-                for(int i = 0; i < maclen; i++)
-                    address[i] = packet[maclen - 1 - i];
+                for(uint8_t i = 0; i < ADDR_WIDTH_5_BYTES; i++)
+                    address[i] = packet[ADDR_WIDTH_5_BYTES - 1 - i];
                 return true;
             }
         }

@@ -11,7 +11,7 @@
 #define LOGITECH_MIN_CHANNEL 2
 #define COUNT_THRESHOLD      2
 
-uint8_t preamble1[] = {0xAA, 0x00};
+uint8_t preamble[] = {0xAA, 0x00};
 
 uint8_t candidates[MAX_ADDRS][5] = {0}; // last 100 sniffed addresses
 uint32_t counts[MAX_ADDRS];
@@ -30,13 +30,13 @@ NRF24L01_Config sniff = {
     .mac_len = ADDR_WIDTH_2_BYTES,
     .arc = 15,
     .ard = 250,
-    .auto_ack = false,
-    .dynamic_payload = true,
+    .auto_ack = {false, false, false, false, false, false},
+    .dynamic_payload = {false, false, false, false, false, false},
     .ack_payload = false,
-    .tx_no_ack = true,
+    .tx_no_ack = false,
     .tx_addr = NULL,
-    .rx_addr = {preamble1, NULL, NULL, NULL, NULL, NULL},
-    .payload_size = MAX_PAYLOAD_SIZE
+    .rx_addr = {preamble, NULL, NULL, NULL, NULL, NULL},
+    .payload_size = {MAX_PAYLOAD_SIZE, 0, 0, 0, 0, 0}
 };
 
 uint8_t run;
@@ -78,8 +78,7 @@ static void hexlify(uint8_t* in, uint8_t size, char* out) {
         out[i * 2] = hex_digits[(in[i] >> 4) & 0x0F];
         out[i * 2 + 1] = hex_digits[in[i] & 0x0F];
     }
-    
-    out[size * 2] = '\0';  // Fin de chaîne
+    out[size * 2] = '\0';
 }
 
 
@@ -174,13 +173,13 @@ static void wrap_up() {
         memcpy(addr, candidates[idx], 5);
         hexlify(addr, 5, trying);
         FURI_LOG_I(LOG_TAG, "trying address %s", trying);
-        ch = nrf24_find_channel(addr, addr, ADDR_WIDTH_5_BYTES, target_rate, 2, LOGITECH_MAX_CHANNEL, false);
+        ch = nrf24_find_channel(addr, addr, ADDR_WIDTH_5_BYTES, target_rate, 2, LOGITECH_MAX_CHANNEL);
         FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
         if(ch > LOGITECH_MAX_CHANNEL) {
             alt_address(addr, altaddr);
             hexlify(altaddr, 5, trying);
             FURI_LOG_I(LOG_TAG, "trying alternate address %s", trying);
-            ch = nrf24_find_channel(altaddr, altaddr, ADDR_WIDTH_5_BYTES, target_rate, 2, LOGITECH_MAX_CHANNEL, false);
+            ch = nrf24_find_channel(altaddr, altaddr, ADDR_WIDTH_5_BYTES, target_rate, 2, LOGITECH_MAX_CHANNEL);
             FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
             memcpy(addr, altaddr, 5);
         }

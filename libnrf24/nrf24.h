@@ -98,8 +98,8 @@ typedef struct NRF24L01_Config {
     nrf24_addr_width mac_len;       // Address width: 2, 3, 4, or 5 bytes
     uint8_t arc;                    // Auto retransmit count (0-15)
     uint16_t ard;                   // Retransmit delay (250 µs to 4000 µs)
-    bool auto_ack;                  // Auto ACK aka "Enhanced ShockBurst"
-    bool dynamic_payload;           // Dynamic payload (requires auto_ack)
+    bool auto_ack[PIPE_QTY];               // Auto ACK aka "Enhanced ShockBurst"
+    bool dynamic_payload[PIPE_QTY];        // Dynamic payload (requires auto_ack)
     bool ack_payload;               // Return ACK + payload (requires dynamic payload)
     bool tx_no_ack;                 // Send "NO_ACK" flag with transmission
 
@@ -109,7 +109,7 @@ typedef struct NRF24L01_Config {
     // Reception addresses for pipes 0 to 5
     uint8_t* rx_addr[PIPE_QTY];     // Array to store full addresses for pipes 0 and 1, and only last byte for pipes 2 to 5
 
-    uint8_t payload_size;           // Fixed payload size (1 to 32 bytes) (unset if dynamic_payload is enabled)
+    uint8_t payload_size[PIPE_QTY]; // Fixed payload size (1 to 32 bytes) for each pipe (0 to 5) (unset if dynamic_payload is enabled)
 } NRF24L01_Config;
 
 
@@ -192,10 +192,11 @@ uint8_t nrf24_get_packetlen(uint8_t pipe);
 /** Sets the RX packet length in data pipe 0
  * 
  * @param      len - length to set
+ * @param      pipe - the pipe number (0 to 5)
  * 
  * @return     device status
  */
-uint8_t nrf24_set_packetlen(uint8_t len);
+uint8_t nrf24_set_packetlen(uint8_t len, uint8_t pipe);
 
 /** Gets configured length of MAC address
  *
@@ -336,7 +337,6 @@ bool nrf24_sniff_address(uint8_t maclen, uint8_t* address);
  * @param      rate - transfer rate in Mbps (1 or 2) 
  * @param      min_channel - channel to start with
  * @param      max_channel - channel to end at
- * @param      autoinit - if true, automatically configure radio for this channel
  * 
  * @return     channel that the address is listening on, if this value is above the max_channel param, it failed
  */
@@ -346,8 +346,7 @@ uint8_t nrf24_find_channel(
     uint8_t maclen,
     uint8_t rate,
     uint8_t min_channel,
-    uint8_t max_channel,
-    bool autoinit);
+    uint8_t max_channel);
 
 /** Converts 64 bit value into uint8_t array
  * @param      val  - 64-bit integer

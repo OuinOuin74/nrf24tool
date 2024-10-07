@@ -7,24 +7,6 @@
 #include <string.h>
 
 uint8_t EMPTY_MAC[] = {0, 0, 0, 0, 0};
-const uint8_t FIND_CHANNEL_PAYLOAD_SIZE = 4;
-
-NRF24L01_Config find_channel_config = {
-    .channel = 0,
-    .data_rate = DATA_RATE_2MBPS,
-    .tx_power = TX_POWER_0DBM,
-    .crc_length = 2,
-    .mac_len = ADDR_WIDTH_5_BYTES,
-    .arc = 15,
-    .ard = 500,
-    .auto_ack = {true, false, false, false, false, false},
-    .dynamic_payload = {true, false, false, false, false, false},
-    .ack_payload = false,
-    .tx_no_ack = false,
-    .tx_addr = NULL,
-    .rx_addr = {NULL, NULL, NULL, NULL, NULL, NULL},
-    .payload_size = {0, 0, 0, 0, 0, 0}
-};
 
 char LOG_TAG[] = "libNRF24";
 
@@ -428,126 +410,14 @@ void nrf24_configure(NRF24L01_Config* config) {
         if (config->payload_size[i] >= MIN_PAYLOAD_SIZE && config->payload_size[i] <= MAX_PAYLOAD_SIZE)
             nrf24_set_packetlen(config->payload_size[i], i); // set fix payload size for pipe i
     }
-    furi_delay_ms(200);
 }
 
-void hexlify(uint8_t* in, uint8_t size, char* out) {
-    memset(out, 0, size * 2);
-    for(int i = 0; i < size; i++)
-        snprintf(out + strlen(out), sizeof(out + strlen(out)), "%02X", in[i]);
-}
+bool nrf24_check_connected() {
+    uint8_t status = nrf24_status();
 
-uint64_t bytes_to_int64(uint8_t* bytes, uint8_t size, bool bigendian) {
-    uint64_t ret = 0;
-    for(int i = 0; i < size; i++) {
-        if(bigendian)
-            ret |= bytes[i] << ((size - 1 - i) * 8);
-        else
-            ret |= bytes[i] << (i * 8);
+    if(status != 0x00) {
+        return true;
+    } else {
+        return false;
     }
-
-    return ret;
-}
-
-void int64_to_bytes(uint64_t val, uint8_t* out, bool bigendian) {
-    for(int i = 0; i < 8; i++) {
-        if(bigendian)
-            out[i] = (val >> ((7 - i) * 8)) & 0xff;
-        else
-            out[i] = (val >> (i * 8)) & 0xff;
-    }
-}
-
-uint32_t bytes_to_int32(uint8_t* bytes, bool bigendian) {
-    uint32_t ret = 0;
-    for(int i = 0; i < 4; i++) {
-        if(bigendian)
-            ret |= bytes[i] << ((3 - i) * 8);
-        else
-            ret |= bytes[i] << (i * 8);
-    }
-
-    return ret;
-}
-
-void int32_to_bytes(uint32_t val, uint8_t* out, bool bigendian) {
-    for(int i = 0; i < 4; i++) {
-        if(bigendian)
-            out[i] = (val >> ((3 - i) * 8)) & 0xff;
-        else
-            out[i] = (val >> (i * 8)) & 0xff;
-    }
-}
-
-uint64_t bytes_to_int16(uint8_t* bytes, bool bigendian) {
-    uint16_t ret = 0;
-    for(int i = 0; i < 2; i++) {
-        if(bigendian)
-            ret |= bytes[i] << ((1 - i) * 8);
-        else
-            ret |= bytes[i] << (i * 8);
-    }
-
-    return ret;
-}
-
-void int16_to_bytes(uint16_t val, uint8_t* out, bool bigendian) {
-    for(int i = 0; i < 2; i++) {
-        if(bigendian)
-            out[i] = (val >> ((1 - i) * 8)) & 0xff;
-        else
-            out[i] = (val >> (i * 8)) & 0xff;
-    }
-}
-
-bool validate_address(uint8_t* addr) {
-    uint16_t bad[] = {0x5555, 0xAAAA, 0x0000, 0xFFFF};
-    uint16_t* addr16 = (uint16_t*) addr;
-
-    for (int i = 0; i < 4; i++) {
-        if (addr16[0] == bad[i] || addr16[1] == bad[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool nrf24_sniff_address(uint8_t* address) {
-    uint8_t packet[32] = {0};
-    uint8_t packetsize;
-    //char printit[65];
-    uint8_t status = 0;
-    uint8_t rpd_value;
-    status = nrf24_rxpacket(packet, &packetsize, true);
-    if(status & RX_DR) {
-        nrf24_read_reg(REG_RPD, &rpd_value, 1);
-        if(rpd_value & 0x01) {
-            if(validate_address(packet)) {
-                for(uint8_t i = 0; i < ADDR_WIDTH_5_BYTES; i++)
-                    address[i] = packet[ADDR_WIDTH_5_BYTES - 1 - i];
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, nrf24_addr_width maclen, nrf24_data_rate rate, uint8_t min_channel, uint8_t max_channel) {
-    uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f};
-    uint8_t ch;
-  
-    find_channel_config.data_rate = rate;
-    find_channel_config.rx_addr[0] = srcmac;
-    find_channel_config.tx_addr = dstmac;
-    find_channel_config.mac_len = maclen;
-    find_channel_config.channel = min_channel;
-
-    nrf24_configure(&find_channel_config);
-
-    for(ch = min_channel; ch <= max_channel; ch++) {
-        nrf24_write_reg(REG_RF_CH, ch);
-        if(nrf24_txpacket(ping_packet, FIND_CHANNEL_PAYLOAD_SIZE, find_channel_config.tx_no_ack)) return ch;
-    }
-
-    return max_channel + 1; // Échec
 }

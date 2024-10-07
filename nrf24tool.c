@@ -6,6 +6,7 @@
 #include "libnrf24/nrf24.h"
 #include "sniff/sniff.h"
 #include "settings.h"
+#include "input.h"
 
 // Main app variable
 Nrf24Tool* nrf24Tool_app = NULL;
@@ -21,9 +22,10 @@ static bool load_setting(Nrf24Tool* context)
     context->settings = &nrf24Tool_settings;
     context->settings->sniff_settings = sniff_defaults;
 
+    context->storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = file_stream_alloc(context->storage);
 
-    if(file_stream_open(stream, FILE_PATH_SETTINGS, FSAM_READ_WRITE, FSOM_OPEN_APPEND))
+    if(file_stream_open(stream, FILE_PATH_SETTINGS, FSAM_READ, FSOM_OPEN_EXISTING))
     {
         file_size = stream_size(stream);
         stream_seek(stream, 0, StreamOffsetFromStart);
@@ -31,18 +33,72 @@ static bool load_setting(Nrf24Tool* context)
         if(file_size > 0)
         {
             FuriString* line = furi_string_alloc();
+            uint8_t settings_map_size = sizeof(settings_map) / sizeof(SettingMapping);
             // Lire le fichier ligne par ligne
             while(stream_read_line(stream, line)) {
-                // Afficher la ligne lue
-                printf("Ligne lue : %s\n", furi_string_get_cstr(line));
-                // Ici, `stream_get_line()` déplace déjà le curseur automatiquement
+                // skip line if comment
+                char first_char = furi_string_get_char(line, 0);
+                if(first_char == '#' || first_char == ' ') continue;
+
+                // find parameter name + value
+                size_t equal_pos = furi_string_search_char(line, '=');
+                if(equal_pos == FURI_STRING_FAILURE) continue;
+                FuriString* key = furi_string_alloc_set(line);
+                FuriString* value = furi_string_alloc_set(line);
+                furi_string_left(key, equal_pos);
+                furi_string_right(value, equal_pos + 1);
+
+                // restore last mode
+                if (furi_string_cmp_str(key, "mode") == 0)
+                {
+                    int mode_int = atoi(furi_string_get_cstr(value));
+                    if (mode_int > 0) context->currentMode = mode_int;
+                    continue;
+                }
+
+                // find parameter name in settings map
+                for(uint8_t i = 0; i < settings_map_size; i++)
+                {
+                    if (furi_string_cmp_str(key, settings_map[i].key) == 0)
+                    {
+                        int value_int = atoi(furi_string_get_cstr(value));
+                        switch (settings_map[i].type) {
+                            case SETTING_TYPE_UINT8:
+                                *((uint8_t*)settings_map[i].target) = (uint8_t)value_int;
+                                break;
+                            case SETTING_TYPE_UINT16:
+                                *((uint16_t*)settings_map[i].target) = (uint16_t)value_int;
+                                break;
+                            case SETTING_TYPE_UINT32:
+                                *((uint32_t*)settings_map[i].target) = (uint32_t)value_int;
+                                break;
+                            case SETTING_TYPE_BOOL:
+                                if(value_int == 1)
+                                    *((bool*)settings_map[i].target) = true;
+                                else
+                                    *((bool*)settings_map[i].target) = false;
+                                break;
+                            case SETTING_TYPE_DATA_RATE:
+                                *((nrf24_data_rate*)settings_map[i].target) = (uint8_t)value_int;
+                                break;
+                            case SETTING_TYPE_TX_POWER:
+                                *((nrf24_tx_power*)settings_map[i].target) = (uint8_t)value_int;
+                                break;
+                            case SETTING_TYPE_ADDR_WIDTH:
+                                *((nrf24_addr_width*)settings_map[i].target) = (uint8_t)value_int;
+                                break;
+                        }
+                    }
+                }
+                furi_string_free(key);
+                furi_string_free(value);
             }
             furi_string_free(line);
         }
-        
-
     }
+    file_stream_close(stream);
     stream_free(stream);
+    furi_record_close(RECORD_STORAGE);
 
     return true;
 }
@@ -65,7 +121,12 @@ static void draw_callback(Canvas* canvas, void* ctx) {
    into the application's queue so it can be processed later. */
 static void input_callback(InputEvent* event, void* ctx) {
     Nrf24Tool* context = ctx;
-    furi_message_queue_put(context->event_queue, event, FuriWaitForever);
+    //furi_message_queue_put(context->event_queue, event, FuriWaitForever);
+    FURI_LOG_I(LOG_TAG, "input event :%d",event->type);
+    if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
+        // make inputs actions
+        inputHandler(event, context);
+    }
 }
 
 /* Allocate the memory and initialise the variables */
@@ -110,22 +171,20 @@ static void nrf24Tool_run(Nrf24Tool* context) {
         FURI_LOG_E(LOG_TAG, "Unable to load application settings !");
 
     /* Endless main program loop */
-    for(bool is_running = true; is_running;) {
-        InputEvent event;
-        /* Wait for an input event. Input events come from the GUI thread via a callback. */
+    context->app_running = true;
+    while(context->app_running) {
+        /* InputEvent event;
+        Wait for an input event. Input events come from the GUI thread via a callback.
+        
         const FuriStatus status =
             furi_message_queue_get(context->event_queue, &event, FuriWaitForever);
 
-        /* This application is only interested in short button presses. */
         if((status != FuriStatusOk) || (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
             continue;
         }
 
-        /* When the user presses the "Back" button, break the loop and exit the application. */
-        if(event.key == InputKeyBack) {
-            is_running = false;
-            FURI_LOG_I(LOG_TAG, "back key presse");
-        }
+        // make inputs actions
+        inputHandler(&event, context); */
     }
 
     // Deinitialize the nRF24 module

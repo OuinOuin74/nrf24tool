@@ -35,5 +35,5 @@ typedef struct {
     SettingType type;
 } SettingMapping;
 
-extern SettingMapping settings_map[];
+extern SettingMapping settings_map[4];
 extern Settings nrf24Tool_settings;

@@ -36,4 +36,5 @@ typedef struct Nrf24Tool {
     FuriMutex* mutex;
     enum Mode currentMode;
     Settings* settings;
+    bool app_running;
 } Nrf24Tool;

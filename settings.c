@@ -1,5 +1,6 @@
 #include "settings.h"
 
+Settings nrf24Tool_settings;
 
 SettingMapping settings_map[] = {
     {"sniff_min_channel", &nrf24Tool_settings.sniff_settings.min_channel,  SETTING_TYPE_UINT8},

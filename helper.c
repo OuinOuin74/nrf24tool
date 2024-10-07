@@ -1,4 +1,3 @@
-
 #include "helper.h"
 
 void hexlify(uint8_t* in, uint8_t size, char* out) {

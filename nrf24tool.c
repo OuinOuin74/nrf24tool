@@ -6,7 +6,6 @@
 #include "libnrf24/nrf24.h"
 #include "sniff/sniff.h"
 #include "settings.h"
-#include "input.h"
 
 // Main app variable
 Nrf24Tool* nrf24Tool_app = NULL;
@@ -109,6 +108,7 @@ static void draw_callback(Canvas* canvas, void* ctx) {
 
     switch (context->currentMode) {
         case MODE_SNIFF_SETTINGS:
+        case MODE_SNIFF_RUN:
             sniff_draw(canvas, context);
             break;
 
@@ -124,6 +124,24 @@ static void input_callback(InputEvent* event, void* ctx) {
     furi_message_queue_put(context->event_queue, event, FuriWaitForever);
 }
 
+static void inputHandler(InputEvent* event, Nrf24Tool* context)
+{
+    switch (context->currentMode) {
+        case MODE_SNIFF_SETTINGS:
+        case MODE_SNIFF_RUN:
+            sniff_event(event, context);
+            break;
+
+        default:
+            break;
+    }
+    
+    if(event->key == InputKeyBack) {
+            context->app_running = false;
+            FURI_LOG_I(LOG_TAG, "back key presse");
+        }
+}
+
 /* Allocate the memory and initialise the variables */
 static Nrf24Tool* nrf24Tool_alloc(void) {
     Nrf24Tool* context = malloc(sizeof(Nrf24Tool));
@@ -135,27 +153,15 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
     context->event_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
 
     context->gui = furi_record_open(RECORD_GUI);
-
-    context->view_dispatcher = view_dispatcher_alloc();
-    view_dispatcher_attach_to_gui(context->view_dispatcher, context->gui, ViewDispatcherTypeFullscreen);
-
-    sniff_gui_alloc(context);
-
-    for(int i = 0; i < SCREEN_QTY; i++)
-    {
-        
-        view_dispatcher_add_view(context->view_dispatcher, Nrf24ViewSniffSettings, context->screen[Nrf24ViewSniffSettings].view_port);
-    }
+    gui_add_view_port(context->gui, context->view_port, GuiLayerFullscreen);
+    view_port_enabled_set(context->view_port, true);
 
     return context;
 }
 
 /* Release the unused resources and deallocate memory */
 static void nrf24Tool_free(Nrf24Tool* context) {
-    view_dispatcher_free(context->view_dispatcher);
 
-    sniff_gui_free(context);
-    
     view_port_enabled_set(context->view_port, false);
     gui_remove_view_port(context->gui, context->view_port);
 
@@ -172,8 +178,6 @@ static void nrf24Tool_run(Nrf24Tool* context) {
     nrf24_init();
 
     if (!nrf24_check_connected()) context->currentMode = MODE_RF24_DISCONNECTED;
-    
-    context->currentMode = MODE_SNIFF_SETTINGS;
 
     // load application settings
     if(!load_setting(context))

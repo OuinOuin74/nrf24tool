@@ -29,28 +29,11 @@ typedef enum {
     MODE_BADMOUSE_RUN
 } Mode;
 
-typedef enum {
-    Nrf24ViewRxSettings = 0,
-    Nrf24ViewRxRun,
-    Nrf24ViewTxSettings,
-    Nrf24ViewTxRun,
-    Nrf24ViewSniffSettings,
-    Nrf24ViewSniffRun,
-    Nrf24ViewBadMouseSettings,
-    Nrf24ViewBadMouseRun,
-} Nrf24Views;
-
-typedef struct Screen {
-    ViewPort* view_port;
-    VariableItemList* itemList;
-} Screen;
-
 /* Application context structure */
 typedef struct Nrf24Tool {
     Gui* gui;
     FuriMessageQueue* event_queue;
-    ViewDispatcher* view_dispatcher;
-    Screen screen[SCREEN_QTY];
+    ViewPort* view_port;
     Storage* storage;
     NotificationApp* notification;
     FuriMutex* mutex;

@@ -2,7 +2,7 @@
 
 #include <furi.h>
 #include <gui/gui.h>
-#include <gui/view_port.h>
+#include <gui/view.h>
 
 #include "../nrf24tool.h"
 #include "../libnrf24/nrf24.h"
@@ -19,6 +19,5 @@
 extern Sniff_settings sniff_defaults;
 
 uint8_t nrf24_sniff(uint32_t scan_time);
-void sniff_gui_alloc(Nrf24Tool* ctx);
-void sniff_gui_free(Nrf24Tool* context);
 void sniff_draw(Canvas* canvas, Nrf24Tool* ctx);
+void sniff_event(InputEvent* event, Nrf24Tool* context);

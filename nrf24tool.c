@@ -120,13 +120,8 @@ static void draw_callback(Canvas* canvas, void* ctx) {
 /* This function is called from the GUI thread. All it does is put the event
    into the application's queue so it can be processed later. */
 static void input_callback(InputEvent* event, void* ctx) {
-    Nrf24Tool* context = ctx;
-    //furi_message_queue_put(context->event_queue, event, FuriWaitForever);
-    FURI_LOG_I(LOG_TAG, "input event :%d",event->type);
-    if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
-        // make inputs actions
-        inputHandler(event, context);
-    }
+    Nrf24Tool* context = (Nrf24Tool*)ctx;
+    furi_message_queue_put(context->event_queue, event, FuriWaitForever);
 }
 
 /* Allocate the memory and initialise the variables */
@@ -140,13 +135,27 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
     context->event_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
 
     context->gui = furi_record_open(RECORD_GUI);
-    gui_add_view_port(context->gui, context->view_port, GuiLayerFullscreen);
+
+    context->view_dispatcher = view_dispatcher_alloc();
+    view_dispatcher_attach_to_gui(context->view_dispatcher, context->gui, ViewDispatcherTypeFullscreen);
+
+    sniff_gui_alloc(context);
+
+    for(int i = 0; i < SCREEN_QTY; i++)
+    {
+        
+        view_dispatcher_add_view(context->view_dispatcher, Nrf24ViewSniffSettings, context->screen[Nrf24ViewSniffSettings].view_port);
+    }
 
     return context;
 }
 
 /* Release the unused resources and deallocate memory */
 static void nrf24Tool_free(Nrf24Tool* context) {
+    view_dispatcher_free(context->view_dispatcher);
+
+    sniff_gui_free(context);
+    
     view_port_enabled_set(context->view_port, false);
     gui_remove_view_port(context->gui, context->view_port);
 
@@ -173,18 +182,15 @@ static void nrf24Tool_run(Nrf24Tool* context) {
     /* Endless main program loop */
     context->app_running = true;
     while(context->app_running) {
-        /* InputEvent event;
-        Wait for an input event. Input events come from the GUI thread via a callback.
-        
+        InputEvent event;
         const FuriStatus status =
             furi_message_queue_get(context->event_queue, &event, FuriWaitForever);
 
         if((status != FuriStatusOk) || (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
             continue;
         }
-
         // make inputs actions
-        inputHandler(&event, context); */
+        inputHandler(&event, context);
     }
 
     // Deinitialize the nRF24 module

@@ -15,11 +15,11 @@ uint32_t candidate_idx = 0;
 char top_address[12];
 nrf24_data_rate target_rate = DATA_RATE_2MBPS;
 
-Sniff_settings sniff_defaults = {
-    .min_channel = LOGITECH_MIN_CHANNEL,
-    .max_channel = LOGITECH_MAX_CHANNEL,
-    .scan_time = DEFAULT_SCANTIME,
-    .data_rate = DATA_RATE_2MBPS,
+Setting sniff_defaults[] = {
+    { .name = "Min. Channel", .type = SETTING_TYPE_UINT8, .value.uint8_val = LOGITECH_MIN_CHANNEL },
+    { .name = "Max. Channel", .type = SETTING_TYPE_UINT8, .value.uint8_val = LOGITECH_MAX_CHANNEL },
+    { .name = "Scan Time", .type = SETTING_TYPE_UINT16, .value.uint16_val = DEFAULT_SCANTIME },
+    { .name = "Data Rate", .type = SETTING_TYPE_DATA_RATE, .value.data_rate_val = DATA_RATE_2MBPS },
 };
 
 NRF24L01_Config sniff = {

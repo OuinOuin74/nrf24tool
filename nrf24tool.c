@@ -13,24 +13,21 @@ Nrf24Tool* nrf24Tool_app = NULL;
 // application settings file path
 const char* FILE_PATH_SETTINGS = APP_DATA_PATH("settings.conf");
 
-static bool load_setting(Nrf24Tool* context)
-{
+static bool load_setting(Nrf24Tool* context) {
     size_t file_size = 0;
 
     // set defaults settings
     context->settings = &nrf24Tool_settings;
-    context->settings->sniff_settings = sniff_defaults;
+    memcpy(context->settings->sniff_settings, sniff_defaults, sizeof(sniff_defaults));
 
     context->storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = file_stream_alloc(context->storage);
 
-    if(file_stream_open(stream, FILE_PATH_SETTINGS, FSAM_READ, FSOM_OPEN_EXISTING))
-    {
+    if(file_stream_open(stream, FILE_PATH_SETTINGS, FSAM_READ, FSOM_OPEN_EXISTING)) {
         file_size = stream_size(stream);
         stream_seek(stream, 0, StreamOffsetFromStart);
-        
-        if(file_size > 0)
-        {
+
+        if(file_size > 0) {
             FuriString* line = furi_string_alloc();
             uint8_t settings_map_size = sizeof(settings_map) / sizeof(SettingMapping);
             // Lire le fichier ligne par ligne
@@ -48,44 +45,41 @@ static bool load_setting(Nrf24Tool* context)
                 furi_string_right(value, equal_pos + 1);
 
                 // restore last mode
-                if (furi_string_cmp_str(key, "mode") == 0)
-                {
+                if(furi_string_cmp_str(key, "app_mode") == 0) {
                     int mode_int = atoi(furi_string_get_cstr(value));
-                    if (mode_int > 0) context->currentMode = mode_int;
+                    if(mode_int > 0) context->currentMode = mode_int;
                     continue;
                 }
 
                 // find parameter name in settings map
-                for(uint8_t i = 0; i < settings_map_size; i++)
-                {
-                    if (furi_string_cmp_str(key, settings_map[i].key) == 0)
-                    {
+                for(uint8_t i = 0; i < settings_map_size; i++) {
+                    if(furi_string_cmp_str(key, settings_map[i].key) == 0) {
                         int value_int = atoi(furi_string_get_cstr(value));
-                        switch (settings_map[i].type) {
-                            case SETTING_TYPE_UINT8:
-                                *((uint8_t*)settings_map[i].target) = (uint8_t)value_int;
-                                break;
-                            case SETTING_TYPE_UINT16:
-                                *((uint16_t*)settings_map[i].target) = (uint16_t)value_int;
-                                break;
-                            case SETTING_TYPE_UINT32:
-                                *((uint32_t*)settings_map[i].target) = (uint32_t)value_int;
-                                break;
-                            case SETTING_TYPE_BOOL:
-                                if(value_int == 1)
-                                    *((bool*)settings_map[i].target) = true;
-                                else
-                                    *((bool*)settings_map[i].target) = false;
-                                break;
-                            case SETTING_TYPE_DATA_RATE:
-                                *((nrf24_data_rate*)settings_map[i].target) = (uint8_t)value_int;
-                                break;
-                            case SETTING_TYPE_TX_POWER:
-                                *((nrf24_tx_power*)settings_map[i].target) = (uint8_t)value_int;
-                                break;
-                            case SETTING_TYPE_ADDR_WIDTH:
-                                *((nrf24_addr_width*)settings_map[i].target) = (uint8_t)value_int;
-                                break;
+                        switch(settings_map[i].type) {
+                        case SETTING_TYPE_UINT8:
+                            *((uint8_t*)settings_map[i].target) = (uint8_t)value_int;
+                            break;
+                        case SETTING_TYPE_UINT16:
+                            *((uint16_t*)settings_map[i].target) = (uint16_t)value_int;
+                            break;
+                        case SETTING_TYPE_UINT32:
+                            *((uint32_t*)settings_map[i].target) = (uint32_t)value_int;
+                            break;
+                        case SETTING_TYPE_BOOL:
+                            if(value_int == 1)
+                                *((bool*)settings_map[i].target) = true;
+                            else
+                                *((bool*)settings_map[i].target) = false;
+                            break;
+                        case SETTING_TYPE_DATA_RATE:
+                            *((nrf24_data_rate*)settings_map[i].target) = (uint8_t)value_int;
+                            break;
+                        case SETTING_TYPE_TX_POWER:
+                            *((nrf24_tx_power*)settings_map[i].target) = (uint8_t)value_int;
+                            break;
+                        case SETTING_TYPE_ADDR_WIDTH:
+                            *((nrf24_addr_width*)settings_map[i].target) = (uint8_t)value_int;
+                            break;
                         }
                     }
                 }
@@ -106,14 +100,14 @@ static bool load_setting(Nrf24Tool* context)
 static void draw_callback(Canvas* canvas, void* ctx) {
     Nrf24Tool* context = ctx;
 
-    switch (context->currentMode) {
-        case MODE_SNIFF_SETTINGS:
-        case MODE_SNIFF_RUN:
-            sniff_draw(canvas, context);
-            break;
+    switch(context->currentMode) {
+    case MODE_SNIFF_SETTINGS:
+    case MODE_SNIFF_RUN:
+        sniff_draw(canvas, context);
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 }
 
@@ -124,22 +118,16 @@ static void input_callback(InputEvent* event, void* ctx) {
     furi_message_queue_put(context->event_queue, event, FuriWaitForever);
 }
 
-static void inputHandler(InputEvent* event, Nrf24Tool* context)
-{
-    switch (context->currentMode) {
-        case MODE_SNIFF_SETTINGS:
-        case MODE_SNIFF_RUN:
-            sniff_event(event, context);
-            break;
+static void inputHandler(InputEvent* event, Nrf24Tool* context) {
+    switch(context->currentMode) {
+    case MODE_SNIFF_SETTINGS:
+    case MODE_SNIFF_RUN:
+        sniff_input(event, context);
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
-    
-    if(event->key == InputKeyBack) {
-            context->app_running = false;
-            FURI_LOG_I(LOG_TAG, "back key presse");
-        }
 }
 
 /* Allocate the memory and initialise the variables */
@@ -161,7 +149,6 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
 
 /* Release the unused resources and deallocate memory */
 static void nrf24Tool_free(Nrf24Tool* context) {
-
     view_port_enabled_set(context->view_port, false);
     gui_remove_view_port(context->gui, context->view_port);
 
@@ -173,15 +160,13 @@ static void nrf24Tool_free(Nrf24Tool* context) {
 
 /* Starts the reader thread and handles the input */
 static void nrf24Tool_run(Nrf24Tool* context) {
-
     // Init NRF24 communication
     nrf24_init();
 
-    if (!nrf24_check_connected()) context->currentMode = MODE_RF24_DISCONNECTED;
+    if(!nrf24_check_connected()) context->currentMode = MODE_RF24_DISCONNECTED;
 
     // load application settings
-    if(!load_setting(context))
-        FURI_LOG_E(LOG_TAG, "Unable to load application settings !");
+    if(!load_setting(context)) FURI_LOG_E(LOG_TAG, "Unable to load application settings !");
 
     /* Endless main program loop */
     context->app_running = true;
@@ -190,7 +175,8 @@ static void nrf24Tool_run(Nrf24Tool* context) {
         const FuriStatus status =
             furi_message_queue_get(context->event_queue, &event, FuriWaitForever);
 
-        if((status != FuriStatusOk) || (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
+        if((status != FuriStatusOk) ||
+           (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
             continue;
         }
         // make inputs actions
@@ -201,8 +187,7 @@ static void nrf24Tool_run(Nrf24Tool* context) {
     nrf24_deinit();
 }
 
-int32_t nrf24tool_app(void* p)
-{
+int32_t nrf24tool_app(void* p) {
     UNUSED(p);
 
     //nrf24_sniff(3000);
@@ -213,6 +198,6 @@ int32_t nrf24tool_app(void* p)
 
     // free program
     nrf24Tool_free(nrf24Tool_app);
-    
+
     return 0;
 }

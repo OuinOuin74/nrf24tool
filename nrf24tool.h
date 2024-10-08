@@ -1,10 +1,8 @@
 #pragma once
 
-#include "gui/modules/variable_item_list.h"
 #include <furi.h>
 #include <gui/gui.h>
 #include <gui/view_port.h>
-#include <gui/view_dispatcher.h>
 #include <storage/storage.h>
 #include <notification/notification.h>
 
@@ -15,7 +13,6 @@
 
 #define LOG_TAG "NRF24SCAN"
 #define MAX_CHANNEL	125
-#define SCREEN_QTY 8
 
 typedef enum {
     MODE_RF24_DISCONNECTED,

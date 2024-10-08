@@ -295,7 +295,7 @@ uint8_t nrf24_set_tx_mac(uint8_t* mac, uint8_t size);
  * 
  * @return     device status
  */
-uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full);
+bool nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full);
 
 /** Sends TX packet
  *

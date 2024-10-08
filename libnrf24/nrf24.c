@@ -1,8 +1,4 @@
-// Modified by vad7, 25.11.2022
-//
 #include "nrf24.h"
-//#include <furi.h>
-//#include <furi_hal.h>
 #include <furi_hal_resources.h>
 #include <string.h>
 
@@ -238,7 +234,6 @@ uint8_t nrf24_set_packetlen(uint8_t len, uint8_t pipe) {
     return status;
 }
 
-
 uint8_t nrf24_set_arc_ard(uint8_t arc, uint16_t ard) {
     if(arc > MAX_ARC_SIZE) return 0;
     if(ard < MIN_ARD_SIZE || ard > MAX_ARD_SIZE || ard % MIN_ARD_SIZE != 0) return 0;
@@ -249,7 +244,7 @@ uint8_t nrf24_set_arc_ard(uint8_t arc, uint16_t ard) {
     return status;
 }
 
-uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full) {
+bool nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full) {
     uint8_t status = 0;
     uint8_t size = 0;
     uint8_t tx_pl_wid[] = {R_RX_PL_WID, 0};
@@ -277,7 +272,8 @@ uint8_t nrf24_rxpacket(uint8_t* packet, uint8_t* packetsize, bool full) {
     }
 
     if (size != 0) *packetsize = size;
-    return status;
+
+    return (status & RX_DR) ? true : false;
 }
 
 // Return 0 when error
@@ -351,7 +347,6 @@ uint8_t nrf24_set_mode(nrf24_mode mode) {
 }
 
 void nrf24_configure(NRF24L01_Config* config) {
-    uint8_t reg_feature;
 
     nrf24_set_mode(MODE_IDLE); // power down
     nrf24_write_reg(REG_CONFIG, 0x00); // Stop nRF
@@ -391,6 +386,7 @@ void nrf24_configure(NRF24L01_Config* config) {
 
     if(config->tx_no_ack) // enable "NO_ACK" flag on tx frames
     {
+        uint8_t reg_feature;
         nrf24_read_reg(REG_FEATURE, &reg_feature, 1);
         reg_feature |= 0x01;
         nrf24_write_reg(REG_FEATURE, reg_feature);

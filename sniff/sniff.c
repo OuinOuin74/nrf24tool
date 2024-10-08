@@ -141,10 +141,9 @@ static bool validate_address(uint8_t* addr) {
 static bool nrf24_sniff_address(uint8_t* address) {
     uint8_t packet[32] = {0};
     uint8_t packetsize;
-    uint8_t status = 0;
     uint8_t rpd_value;
-    status = nrf24_rxpacket(packet, &packetsize, true);
-    if(status & RX_DR) {
+    
+    if(nrf24_rxpacket(packet, &packetsize, true)) {
         nrf24_read_reg(REG_RPD, &rpd_value, 1);
         if(rpd_value & 0x01) {
             if(validate_address(packet)) {

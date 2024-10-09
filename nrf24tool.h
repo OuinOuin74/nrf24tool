@@ -37,4 +37,5 @@ typedef struct Nrf24Tool {
     Mode currentMode;
     Settings* settings;
     bool app_running;
+    bool tool_running;
 } Nrf24Tool;

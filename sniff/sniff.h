@@ -10,14 +10,14 @@
 
 #define MAX_ADDRS                 100
 #define MAX_CONFIRMED             32
-#define LOGITECH_MAX_CHANNEL      78
-#define LOGITECH_MIN_CHANNEL      2
+#define DEFAULT_MAX_CHANNEL      82
+#define DEFAULT_MIN_CHANNEL      2
 #define DEFAULT_SCANTIME          4000
 #define COUNT_THRESHOLD           2
 #define FIND_CHANNEL_PAYLOAD_SIZE 4
 
-extern Setting sniff_defaults[SETTINGS_SNIFF_QTY];
+extern Setting sniff_defaults[SNIFF_SETTING_COUNT];
 
-uint8_t nrf24_sniff(uint32_t scan_time);
+void nrf24_sniff(Nrf24Tool* context);
 void sniff_draw(Canvas* canvas, Nrf24Tool* context);
 void sniff_input(InputEvent* event, Nrf24Tool* context);

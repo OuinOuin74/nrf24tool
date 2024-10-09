@@ -16,14 +16,34 @@ char top_address[12];
 nrf24_data_rate target_rate = DATA_RATE_2MBPS;
 
 Setting sniff_defaults[] = {
-    { .name = "Min. Channel", .type = SETTING_TYPE_UINT8, .value.uint8_val = LOGITECH_MIN_CHANNEL },
-    { .name = "Max. Channel", .type = SETTING_TYPE_UINT8, .value.uint8_val = LOGITECH_MAX_CHANNEL },
-    { .name = "Scan Time", .type = SETTING_TYPE_UINT16, .value.uint16_val = DEFAULT_SCANTIME },
-    { .name = "Data Rate", .type = SETTING_TYPE_DATA_RATE, .value.data_rate_val = DATA_RATE_2MBPS },
+    {.name = "Min. Channel",
+     .type = SETTING_TYPE_UINT8,
+     .value.u8 = DEFAULT_MIN_CHANNEL,
+     .min = DEFAULT_MIN_CHANNEL,
+     .max = DEFAULT_MAX_CHANNEL,
+     .step = 1},
+    {.name = "Max. Channel",
+     .type = SETTING_TYPE_UINT8,
+     .value.u8 = DEFAULT_MAX_CHANNEL,
+     .min = DEFAULT_MIN_CHANNEL,
+     .max = DEFAULT_MAX_CHANNEL,
+     .step = 1},
+    {.name = "Scan Time (µs)",
+     .type = SETTING_TYPE_UINT16,
+     .value.u16 = DEFAULT_SCANTIME,
+     .min = 500,
+     .max = 5000,
+     .step = 500},
+    {.name = "Data Rate",
+     .type = SETTING_TYPE_DATA_RATE,
+     .value.d_r = DATA_RATE_2MBPS,
+     .min = DATA_RATE_1MBPS,
+     .max = DATA_RATE_250KBPS,
+     .step = 1},
 };
 
 NRF24L01_Config sniff = {
-    .channel = LOGITECH_MIN_CHANNEL,
+    .channel = DEFAULT_MIN_CHANNEL,
     .data_rate = DATA_RATE_2MBPS,
     .tx_power = TX_POWER_0DBM,
     .crc_length = 0,
@@ -36,8 +56,7 @@ NRF24L01_Config sniff = {
     .tx_no_ack = false,
     .tx_addr = NULL,
     .rx_addr = {preamble, NULL, NULL, NULL, NULL, NULL},
-    .payload_size = {MAX_PAYLOAD_SIZE, 0, 0, 0, 0, 0}
-};
+    .payload_size = {MAX_PAYLOAD_SIZE, 0, 0, 0, 0, 0}};
 
 NRF24L01_Config find_channel_config = {
     .channel = 0,
@@ -53,8 +72,7 @@ NRF24L01_Config find_channel_config = {
     .tx_no_ack = false,
     .tx_addr = NULL,
     .rx_addr = {NULL, NULL, NULL, NULL, NULL, NULL},
-    .payload_size = {0, 0, 0, 0, 0, 0}
-};
+    .payload_size = {0, 0, 0, 0, 0, 0}};
 
 static int get_addr_index(uint8_t* addr, uint8_t addr_size) {
     for(uint32_t i = 0; i < total_candidates; i++) {
@@ -128,10 +146,10 @@ static void alt_address(uint8_t* addr, uint8_t* altaddr) {
 
 static bool validate_address(uint8_t* addr) {
     uint16_t bad[] = {0x5555, 0xAAAA, 0x0000, 0xFFFF};
-    uint16_t* addr16 = (uint16_t*) addr;
+    uint16_t* addr16 = (uint16_t*)addr;
 
-    for (int i = 0; i < 4; i++) {
-        if (addr16[0] == bad[i] || addr16[1] == bad[i]) {
+    for(int i = 0; i < 4; i++) {
+        if(addr16[0] == bad[i] || addr16[1] == bad[i]) {
             return false;
         }
     }
@@ -142,7 +160,7 @@ static bool nrf24_sniff_address(uint8_t* address) {
     uint8_t packet[32] = {0};
     uint8_t packetsize;
     uint8_t rpd_value;
-    
+
     if(nrf24_rxpacket(packet, &packetsize, true)) {
         nrf24_read_reg(REG_RPD, &rpd_value, 1);
         if(rpd_value & 0x01) {
@@ -156,10 +174,16 @@ static bool nrf24_sniff_address(uint8_t* address) {
     return false;
 }
 
-static uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, nrf24_addr_width maclen, nrf24_data_rate rate, uint8_t min_channel, uint8_t max_channel) {
+static uint8_t nrf24_find_channel(
+    uint8_t* srcmac,
+    uint8_t* dstmac,
+    nrf24_addr_width maclen,
+    nrf24_data_rate rate,
+    uint8_t min_channel,
+    uint8_t max_channel) {
     uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f};
     uint8_t ch;
-  
+
     find_channel_config.data_rate = rate;
     find_channel_config.rx_addr[0] = srcmac;
     find_channel_config.tx_addr = dstmac;
@@ -170,13 +194,14 @@ static uint8_t nrf24_find_channel(uint8_t* srcmac, uint8_t* dstmac, nrf24_addr_w
 
     for(ch = min_channel; ch <= max_channel; ch++) {
         nrf24_set_chan(ch);
-        if(nrf24_txpacket(ping_packet, FIND_CHANNEL_PAYLOAD_SIZE, find_channel_config.tx_no_ack)) return ch;
+        if(nrf24_txpacket(ping_packet, FIND_CHANNEL_PAYLOAD_SIZE, find_channel_config.tx_no_ack))
+            return ch;
     }
 
     return max_channel + 1; // Échec
 }
 
-static void wrap_up() {
+static void wrap_up(uint8_t min_channel, uint8_t max_channel) {
     uint8_t ch;
     uint8_t addr[5];
     uint8_t altaddr[5];
@@ -193,20 +218,22 @@ static void wrap_up() {
         memcpy(addr, candidates[idx], 5);
         hexlify(addr, 5, trying);
         FURI_LOG_I(LOG_TAG, "trying address %s", trying);
-        ch = nrf24_find_channel(addr, addr, ADDR_WIDTH_5_BYTES, target_rate, 2, LOGITECH_MAX_CHANNEL);
+        ch = nrf24_find_channel(
+            addr, addr, ADDR_WIDTH_5_BYTES, target_rate, min_channel, max_channel);
         FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
-        if(ch > LOGITECH_MAX_CHANNEL) {
+        if(ch > max_channel) {
             alt_address(addr, altaddr);
             hexlify(altaddr, 5, trying);
             FURI_LOG_I(LOG_TAG, "trying alternate address %s", trying);
-            ch = nrf24_find_channel(altaddr, altaddr, ADDR_WIDTH_5_BYTES, target_rate, 2, LOGITECH_MAX_CHANNEL);
+            ch = nrf24_find_channel(
+                altaddr, altaddr, ADDR_WIDTH_5_BYTES, target_rate, min_channel, max_channel);
             FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
             memcpy(addr, altaddr, 5);
         }
 
-        if(ch <= LOGITECH_MAX_CHANNEL) {
+        if(ch <= max_channel) {
             hexlify(addr, 5, top_address);
-            FURI_LOG_I(LOG_TAG, "Address found ! : %s",top_address);
+            FURI_LOG_I(LOG_TAG, "Address found ! : %s", top_address);
             furi_crash();
             if(confirmed_idx < MAX_CONFIRMED) memcpy(confirmed[confirmed_idx++], addr, 5);
             break;
@@ -214,16 +241,18 @@ static void wrap_up() {
     }
 }
 
-uint8_t nrf24_sniff(uint32_t scan_time) {
-
+void nrf24_sniff(Nrf24Tool* context) {
     uint8_t address[MAX_MAC_SIZE];
     uint32_t start = 0;
-    uint8_t target_channel = LOGITECH_MIN_CHANNEL;
+    Setting* setting = context->settings->sniff_settings;
+    uint8_t min_channel = setting[SNIFF_SETTING_MIN_CHANNEL].value.u8;
+    uint8_t max_channel = setting[SNIFF_SETTING_MAX_CHANNEL].value.u8;
+    uint8_t target_channel = min_channel;
 
     sniff.channel = target_channel;
     nrf24_configure(&sniff);
 
-    while(true) {
+    while(context->tool_running) {
         if(nrf24_sniff_address(address)) {
             int idx;
             uint8_t* top_addr;
@@ -243,11 +272,11 @@ uint8_t nrf24_sniff(uint32_t scan_time) {
             }
         }
 
-        if(furi_get_tick() - start >= scan_time) {
+        if(furi_get_tick() - start >= setting[SNIFF_SETTING_SCAN_TIME].value.u16) {
             target_channel++;
-            if(target_channel > LOGITECH_MAX_CHANNEL) target_channel = LOGITECH_MIN_CHANNEL;
+            if(target_channel > max_channel) target_channel = min_channel;
 
-            wrap_up();
+            wrap_up(min_channel, max_channel);
             sniff.channel = target_channel;
             nrf24_configure(&sniff);
             nrf24_set_mode(MODE_RX);

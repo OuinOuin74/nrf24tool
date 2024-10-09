@@ -12,6 +12,7 @@ Nrf24Tool* nrf24Tool_app = NULL;
 
 // application settings file path
 const char* FILE_PATH_SETTINGS = APP_DATA_PATH("settings.conf");
+const char* CURRENT_MODE = "app_mode";
 
 static bool load_setting(Nrf24Tool* context) {
     size_t file_size = 0;
@@ -29,7 +30,6 @@ static bool load_setting(Nrf24Tool* context) {
 
         if(file_size > 0) {
             FuriString* line = furi_string_alloc();
-            uint8_t settings_map_size = sizeof(settings_map) / sizeof(SettingMapping);
             // Lire le fichier ligne par ligne
             while(stream_read_line(stream, line)) {
                 // skip line if comment
@@ -45,14 +45,14 @@ static bool load_setting(Nrf24Tool* context) {
                 furi_string_right(value, equal_pos + 1);
 
                 // restore last mode
-                if(furi_string_cmp_str(key, "app_mode") == 0) {
+                if(furi_string_cmp_str(key, CURRENT_MODE) == 0) {
                     int mode_int = atoi(furi_string_get_cstr(value));
                     if(mode_int > 0) context->currentMode = mode_int;
                     continue;
                 }
 
                 // find parameter name in settings map
-                for(uint8_t i = 0; i < settings_map_size; i++) {
+                for(uint8_t i = 0; i < SETTINGS_QTY; i++) {
                     if(furi_string_cmp_str(key, settings_map[i].key) == 0) {
                         int value_int = atoi(furi_string_get_cstr(value));
                         switch(settings_map[i].type) {
@@ -94,6 +94,61 @@ static bool load_setting(Nrf24Tool* context) {
     furi_record_close(RECORD_STORAGE);
 
     return true;
+}
+
+static bool save_setting(Nrf24Tool* context) {
+    //size_t file_size = 0;
+    bool ret = false;
+
+    context->storage = furi_record_open(RECORD_STORAGE);
+    Stream* stream = file_stream_alloc(context->storage);
+    FuriString* line = furi_string_alloc_set_str(CURRENT_MODE);
+
+    if(file_stream_open(stream, FILE_PATH_SETTINGS, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+        // save current mode
+        furi_string_push_back(line, '=');
+        furi_string_cat_printf(line, "%u", context->currentMode);
+        stream_write_format(stream, "%s=%u\n", CURRENT_MODE, context->currentMode);
+        for(uint8_t i = 0; i < SETTINGS_QTY; i++) {
+            switch(settings_map[i].type) {
+            case SETTING_TYPE_UINT8:
+                stream_write_format(
+                stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
+                continue;
+            case SETTING_TYPE_UINT16:
+                stream_write_format(
+                stream, "%s=%u\n", settings_map[i].key, *((uint16_t*)settings_map[i].target));
+                continue;
+            case SETTING_TYPE_UINT32:
+                stream_write_format(
+                stream, "%s=%lu\n", settings_map[i].key, *((uint32_t*)settings_map[i].target));
+                continue;
+            case SETTING_TYPE_BOOL:
+                if(*(bool*)settings_map[i].target == true)
+                    stream_write_format(stream, "%s=%u\n", settings_map[i].key, 1);
+                else
+                    stream_write_format(stream, "%s=%u\n", settings_map[i].key, 0);
+                continue;
+            case SETTING_TYPE_DATA_RATE:
+            case SETTING_TYPE_TX_POWER:
+            case SETTING_TYPE_ADDR_WIDTH:
+                stream_write_format(
+                stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
+                continue;
+            }
+        }
+        ret = true;
+    }
+    else {
+        FURI_LOG_E(LOG_TAG, "Error saving settings to file");
+    }
+
+    furi_string_free(line);
+    file_stream_close(stream);
+    stream_free(stream);
+    furi_record_close(RECORD_STORAGE);
+
+    return ret;
 }
 
 /* Draw the GUI of the application. The screen is completely redrawn during each call. */
@@ -195,6 +250,9 @@ int32_t nrf24tool_app(void* p) {
 
     // run program
     nrf24Tool_run(nrf24Tool_app);
+
+    // save settings before exit
+    save_setting(nrf24Tool_app);
 
     // free program
     nrf24Tool_free(nrf24Tool_app);

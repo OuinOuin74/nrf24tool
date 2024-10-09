@@ -4,11 +4,19 @@
 
 #include "libnrf24/nrf24.h"
 
-#define SETTINGS_RX_QTY 0
-#define SETTINGS_TX_QTY 0
-#define SETTINGS_SNIFF_QTY 4
+typedef enum {
+    SNIFF_SETTING_MIN_CHANNEL,
+    SNIFF_SETTING_MAX_CHANNEL,
+    SNIFF_SETTING_SCAN_TIME,
+    SNIFF_SETTING_DATA_RATE,
+    SNIFF_SETTING_COUNT
+} SniffSettingIndex;
+
+#define SETTINGS_RX_QTY       0
+#define SETTINGS_TX_QTY       0
 #define SETTINGS_BADMOUSE_QTY 0
-#define SETTINGS_QTY (SETTINGS_RX_QTY + SETTINGS_TX_QTY + SETTINGS_SNIFF_QTY + SETTINGS_BADMOUSE_QTY)
+#define SETTINGS_QTY \
+    (SETTINGS_RX_QTY + SETTINGS_TX_QTY + SNIFF_SETTING_COUNT + SETTINGS_BADMOUSE_QTY)
 
 struct Nrf24Tool;
 extern struct Nrf24Tool* nrf24Tool_app;
@@ -24,13 +32,13 @@ typedef enum {
 } SettingType;
 
 typedef union {
-    uint8_t uint8_val;
-    uint16_t uint16_val;
-    uint32_t uint32_val;
-    bool bool_val;
-    nrf24_data_rate data_rate_val;
-    nrf24_tx_power tx_power_val;
-    nrf24_addr_width addr_width_val;
+    uint8_t u8;
+    uint16_t u16;
+    uint32_t u32;
+    bool b;
+    nrf24_data_rate d_r;
+    nrf24_tx_power t_p;
+    nrf24_addr_width a_w;
 } SettingValue;
 
 typedef enum {
@@ -45,17 +53,13 @@ typedef struct {
     char name[30];
     SettingType type;
     SettingValue value;
+    uint32_t min;
+    uint32_t max;
+    uint32_t step;
 } Setting;
 
-typedef struct Sniff_settings {
-    Setting min_channel;
-    Setting max_channel;
-    Setting scan_time;
-    Setting data_rate;
-} Sniff_settings;
-
 typedef struct Settings {
-    Setting sniff_settings[SETTINGS_SNIFF_QTY];
+    Setting sniff_settings[SNIFF_SETTING_COUNT];
 
 } Settings;
 

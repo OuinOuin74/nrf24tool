@@ -5,18 +5,28 @@
 #include "libnrf24/nrf24.h"
 
 typedef enum {
+    RX_SETTING_COUNT
+} RxSettingIndex;
+
+typedef enum {
+    TX_SETTING_COUNT
+} TxSettingIndex;
+
+typedef enum {
     SNIFF_SETTING_MIN_CHANNEL,
     SNIFF_SETTING_MAX_CHANNEL,
     SNIFF_SETTING_SCAN_TIME,
     SNIFF_SETTING_DATA_RATE,
+    SNIFF_SETTING_RPD,
     SNIFF_SETTING_COUNT
 } SniffSettingIndex;
 
-#define SETTINGS_RX_QTY       0
-#define SETTINGS_TX_QTY       0
-#define SETTINGS_BADMOUSE_QTY 0
+typedef enum {
+    BADMOUSE_SETTING_COUNT
+} BadmouseSettingIndex;
+
 #define SETTINGS_QTY \
-    (SETTINGS_RX_QTY + SETTINGS_TX_QTY + SNIFF_SETTING_COUNT + SETTINGS_BADMOUSE_QTY)
+    (RX_SETTING_COUNT + TX_SETTING_COUNT + SNIFF_SETTING_COUNT + BADMOUSE_SETTING_COUNT)
 
 struct Nrf24Tool;
 extern struct Nrf24Tool* nrf24Tool_app;
@@ -40,14 +50,6 @@ typedef union {
     nrf24_tx_power t_p;
     nrf24_addr_width a_w;
 } SettingValue;
-
-typedef enum {
-    SETTING_RX = 0,
-    SETTING_TX,
-    SETTING_SNIFF,
-    SETTING_BADMOUSE,
-    SETTING_APP,
-} SettingMode;
 
 typedef struct {
     char name[30];

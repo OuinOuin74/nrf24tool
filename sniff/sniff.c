@@ -1,6 +1,8 @@
 #include "sniff.h"
+#include "../input.h"
 #include "../helper.h"
 #include "../libnrf24/nrf24.h"
+#include "stream/file_stream.h"
 
 //#define LOG_TAG "NRF24_sniff"
 
@@ -10,10 +12,16 @@ uint8_t candidates[MAX_ADDRS][5] = {0}; // last 100 sniffed addresses
 uint32_t counts[MAX_ADDRS];
 uint8_t confirmed[MAX_CONFIRMED][5] = {0}; // first 32 confirmed addresses
 uint8_t confirmed_idx = 0;
+const char* FILE_PATH_ADDR = APP_DATA_PATH("addresses.txt");
 uint32_t total_candidates = 0;
 uint32_t candidate_idx = 0;
-char top_address[12];
+char top_address[HEX_MAC_LEN];
 nrf24_data_rate target_rate = DATA_RATE_2MBPS;
+
+SniffStatus sniff_status = {
+    .current_channel = 0,
+    .addr_find_count = 0,
+};
 
 Setting sniff_defaults[] = {
     {.name = "Min. Channel",
@@ -40,6 +48,12 @@ Setting sniff_defaults[] = {
      .min = DATA_RATE_1MBPS,
      .max = DATA_RATE_250KBPS,
      .step = 1},
+     {.name = "Rx Power Detector",
+     .type = SETTING_TYPE_BOOL,
+     .value.b = true,
+     .min = 0,
+     .max = 1,
+     .step = 1}
 };
 
 NRF24L01_Config sniff = {
@@ -105,7 +119,7 @@ static void insert_addr(uint8_t* addr, uint8_t addr_size) {
 static bool previously_confirmed(uint8_t* addr) {
     bool found = false;
     for(int i = 0; i < MAX_CONFIRMED; i++) {
-        if(!memcmp(confirmed[i], addr, 5)) {
+        if(!memcmp(confirmed[i], addr, MAX_MAC_SIZE)) {
             found = true;
             break;
         }
@@ -156,14 +170,14 @@ static bool validate_address(uint8_t* addr) {
     return true;
 }
 
-static bool nrf24_sniff_address(uint8_t* address) {
+static bool nrf24_sniff_address(uint8_t* address, bool rpd) {
     uint8_t packet[32] = {0};
     uint8_t packetsize;
     uint8_t rpd_value;
 
     if(nrf24_rxpacket(packet, &packetsize, true)) {
         nrf24_read_reg(REG_RPD, &rpd_value, 1);
-        if(rpd_value & 0x01) {
+        if((rpd_value & 0x01) || !rpd) {
             if(validate_address(packet)) {
                 for(uint8_t i = 0; i < ADDR_WIDTH_5_BYTES; i++)
                     address[i] = packet[ADDR_WIDTH_5_BYTES - 1 - i];
@@ -201,12 +215,15 @@ static uint8_t nrf24_find_channel(
     return max_channel + 1; // Échec
 }
 
-static void wrap_up(uint8_t min_channel, uint8_t max_channel) {
+static void wrap_up(Nrf24Tool* context) {
     uint8_t ch;
     uint8_t addr[5];
     uint8_t altaddr[5];
     char trying[12];
     int idx;
+    Setting* setting = context->settings->sniff_settings;
+    uint8_t min_channel = setting[SNIFF_SETTING_MIN_CHANNEL].value.u8;
+    uint8_t max_channel = setting[SNIFF_SETTING_MAX_CHANNEL].value.u8;
 
     nrf24_set_mode(MODE_IDLE);
 
@@ -214,10 +231,12 @@ static void wrap_up(uint8_t min_channel, uint8_t max_channel) {
         idx = get_highest_idx();
         if(counts[idx] < COUNT_THRESHOLD) break;
 
+        sniff_status.current_channel = 0;
         counts[idx] = 0;
         memcpy(addr, candidates[idx], 5);
         hexlify(addr, 5, trying);
         FURI_LOG_I(LOG_TAG, "trying address %s", trying);
+        memcpy(sniff_status.tested_addr, trying, HEX_MAC_LEN);
         ch = nrf24_find_channel(
             addr, addr, ADDR_WIDTH_5_BYTES, target_rate, min_channel, max_channel);
         FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
@@ -225,6 +244,7 @@ static void wrap_up(uint8_t min_channel, uint8_t max_channel) {
             alt_address(addr, altaddr);
             hexlify(altaddr, 5, trying);
             FURI_LOG_I(LOG_TAG, "trying alternate address %s", trying);
+            memcpy(sniff_status.tested_addr, trying, HEX_MAC_LEN);
             ch = nrf24_find_channel(
                 altaddr, altaddr, ADDR_WIDTH_5_BYTES, target_rate, min_channel, max_channel);
             FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
@@ -234,11 +254,56 @@ static void wrap_up(uint8_t min_channel, uint8_t max_channel) {
         if(ch <= max_channel) {
             hexlify(addr, 5, top_address);
             FURI_LOG_I(LOG_TAG, "Address found ! : %s", top_address);
-            furi_crash();
-            if(confirmed_idx < MAX_CONFIRMED) memcpy(confirmed[confirmed_idx++], addr, 5);
+            memcpy(sniff_status.last_find_addr, top_address, HEX_MAC_LEN);
+            if(confirmed_idx < MAX_CONFIRMED) {
+                memcpy(confirmed[confirmed_idx++], addr, ADDR_WIDTH_5_BYTES);
+                stream_write_format(context->stream, "%s\n", top_address);
+            }
+            sniff_status.addr_find_count = confirmed_idx;
+            sniff_status.addr_new_count++;
             break;
         }
     }
+}
+
+static bool load_file(Nrf24Tool* context)
+{
+    size_t file_size = 0;
+
+    context->storage = furi_record_open(RECORD_STORAGE);
+    context->stream = file_stream_alloc(context->storage);
+
+    if(file_stream_open(context->stream, FILE_PATH_ADDR, FSAM_READ_WRITE, FSOM_OPEN_ALWAYS)) {
+        file_size = stream_size(context->stream);
+
+        // file empty
+        if (file_size == 0)
+        {
+            confirmed_idx = 0;
+        }
+        else {
+            FuriString* line = furi_string_alloc();
+            stream_seek(context->stream, 0, StreamOffsetFromStart);
+            while(stream_read_line(context->stream, line)) {
+                // copy previously find adresse
+                size_t line_lenght = furi_string_size(line);
+                if(line_lenght > HEX_MAC_LEN) continue;
+                if(confirmed_idx < MAX_CONFIRMED) {
+                    uint8_t addr[MAX_MAC_SIZE];
+                    unhexlify(furi_string_get_cstr(line), (line_lenght - 1) / 2, addr);
+                    memcpy(confirmed[confirmed_idx++], addr, MAX_MAC_SIZE);
+                } else {
+                    FURI_LOG_E(LOG_TAG, "Sniffing : confirmed buffer overflow!");
+                    return false;
+                }
+            }
+            furi_string_free(line);
+        }
+        sniff_status.addr_find_count = confirmed_idx;
+        sniff_status.addr_new_count = 0;
+        return true;
+    }
+    return false;
 }
 
 void nrf24_sniff(Nrf24Tool* context) {
@@ -249,11 +314,34 @@ void nrf24_sniff(Nrf24Tool* context) {
     uint8_t max_channel = setting[SNIFF_SETTING_MAX_CHANNEL].value.u8;
     uint8_t target_channel = min_channel;
 
+    memcpy(sniff_status.tested_addr, EMPTY_HEX, HEX_MAC_LEN);
+    memcpy(sniff_status.last_find_addr, EMPTY_HEX, HEX_MAC_LEN);
+    memset(candidates, 0, sizeof(candidates));
+    memset(counts, 0, sizeof(counts));
+    memset(confirmed, 0, sizeof(confirmed));
+    confirmed_idx = 0;
+    total_candidates = 0;
+    candidate_idx = 0;
+
+    if(!load_file(context))
+    {
+        FURI_LOG_E(LOG_TAG, "Sniffing : error opening adresses file !");
+        context->tool_running = false;
+        file_stream_close(context->stream);
+        stream_free(context->stream);
+        furi_record_close(RECORD_STORAGE);
+        return;
+    }
+
     sniff.channel = target_channel;
+    sniff.data_rate = context->settings->sniff_settings[SNIFF_SETTING_DATA_RATE].value.d_r;
     nrf24_configure(&sniff);
+    sniff_status.current_channel = target_channel;
+
+    start = furi_get_tick();
 
     while(context->tool_running) {
-        if(nrf24_sniff_address(address)) {
+        if(nrf24_sniff_address(address, setting[SNIFF_SETTING_RPD].value.b)) {
             int idx;
             uint8_t* top_addr;
             if(!previously_confirmed(address)) {
@@ -276,12 +364,21 @@ void nrf24_sniff(Nrf24Tool* context) {
             target_channel++;
             if(target_channel > max_channel) target_channel = min_channel;
 
-            wrap_up(min_channel, max_channel);
+            wrap_up(context);
             sniff.channel = target_channel;
+            memcpy(sniff_status.tested_addr, EMPTY_HEX, HEX_MAC_LEN);
             nrf24_configure(&sniff);
             nrf24_set_mode(MODE_RX);
+            sniff_status.current_channel = target_channel;
             FURI_LOG_I(LOG_TAG, "new channel : %d", nrf24_get_chan());
             start = furi_get_tick();
         }
+
+        // handle input actions
+        handleEvent(context);
     }
+    // close addresses file
+    file_stream_close(context->stream);
+    stream_free(context->stream);
+    furi_record_close(RECORD_STORAGE);
 }

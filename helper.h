@@ -3,8 +3,12 @@
 #include "settings.h"
 #include <furi.h>
 
+#define HEX_MAC_LEN 11
+
+extern char EMPTY_HEX[HEX_MAC_LEN];
 
 void hexlify(uint8_t* in, uint8_t size, char* out);
+void unhexlify(const char* in, uint8_t size, uint8_t* out);
 const char* setting_value_to_string(Setting setting, char* buffer, size_t buffer_size);
 uint32_t get_setting_value(Setting* setting);
 void set_setting_value(Setting* setting, uint32_t new_value);

@@ -15,5 +15,7 @@ SettingMapping settings_map[] = {
     {"sniff_data_rate",
      &nrf24Tool_settings.sniff_settings[SNIFF_SETTING_DATA_RATE].value.d_r,
      SETTING_TYPE_DATA_RATE},
-
+     {"sniff_rpd",
+     &nrf24Tool_settings.sniff_settings[SNIFF_SETTING_RPD].value.b,
+     SETTING_TYPE_BOOL},
 };

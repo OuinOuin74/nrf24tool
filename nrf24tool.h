@@ -5,6 +5,7 @@
 #include <gui/view_port.h>
 #include <storage/storage.h>
 #include <notification/notification.h>
+#include <stream/stream.h>
 
 
 #include "libnrf24/nrf24.h"
@@ -32,6 +33,7 @@ typedef struct Nrf24Tool {
     FuriMessageQueue* event_queue;
     ViewPort* view_port;
     Storage* storage;
+    Stream* stream;
     NotificationApp* notification;
     FuriMutex* mutex;
     Mode currentMode;

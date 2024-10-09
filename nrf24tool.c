@@ -6,6 +6,7 @@
 #include "libnrf24/nrf24.h"
 #include "sniff/sniff.h"
 #include "settings.h"
+#include "input.h"
 
 // Main app variable
 Nrf24Tool* nrf24Tool_app = NULL;
@@ -173,18 +174,6 @@ static void input_callback(InputEvent* event, void* ctx) {
     furi_message_queue_put(context->event_queue, event, FuriWaitForever);
 }
 
-static void inputHandler(InputEvent* event, Nrf24Tool* context) {
-    switch(context->currentMode) {
-    case MODE_SNIFF_SETTINGS:
-    case MODE_SNIFF_RUN:
-        sniff_input(event, context);
-        break;
-
-    default:
-        break;
-    }
-}
-
 /* Allocate the memory and initialise the variables */
 static Nrf24Tool* nrf24Tool_alloc(void) {
     Nrf24Tool* context = malloc(sizeof(Nrf24Tool));
@@ -226,16 +215,9 @@ static void nrf24Tool_run(Nrf24Tool* context) {
     /* Endless main program loop */
     context->app_running = true;
     while(context->app_running) {
-        InputEvent event;
-        const FuriStatus status =
-            furi_message_queue_get(context->event_queue, &event, FuriWaitForever);
-
-        if((status != FuriStatusOk) ||
-           (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
-            continue;
-        }
-        // make inputs actions
-        inputHandler(&event, context);
+        
+        // handle input actions
+        handleEvent(context);
     }
 
     // Deinitialize the nRF24 module

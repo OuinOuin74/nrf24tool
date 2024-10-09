@@ -1,6 +1,8 @@
 #include "helper.h"
 #include "libnrf24/nrf24.h"
 
+char EMPTY_HEX[HEX_MAC_LEN] = "0000000000";
+
 void hexlify(uint8_t* in, uint8_t size, char* out) {
     const char hex_digits[] = "0123456789ABCDEF";
 
@@ -9,6 +11,16 @@ void hexlify(uint8_t* in, uint8_t size, char* out) {
         out[i * 2 + 1] = hex_digits[in[i] & 0x0F];
     }
     out[size * 2] = '\0';
+}
+
+void unhexlify(const char* in, uint8_t size, uint8_t* out) {
+    for(int i = 0; i < size; i++) {
+        char high_nibble = toupper(in[i * 2]);
+        char low_nibble = toupper(in[i * 2 + 1]);
+
+        out[i] = ((high_nibble >= 'A') ? (high_nibble - 'A' + 10) : (high_nibble - '0')) << 4;
+        out[i] |= (low_nibble >= 'A') ? (low_nibble - 'A' + 10) : (low_nibble - '0');
+    }
 }
 
 // Function to convert the setting value to a string based on the setting type

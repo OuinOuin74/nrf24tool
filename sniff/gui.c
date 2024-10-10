@@ -3,6 +3,7 @@
 
 static uint8_t user_index = 0;
 static uint8_t draw_index = 0;
+static uint8_t confirmed_idx_draw = 0;
 static const uint8_t ITEMS_ON_SCREEN = 4;
 static const uint8_t start_x = 2;
 static const uint8_t start_y = 14;
@@ -55,19 +56,24 @@ static void draw_run(Canvas* canvas, Nrf24Tool* context) {
     // current channel
     line_num++;
     char status_str[30];
-    if(sniff_status.current_channel != 0) snprintf(status_str, 30, "Scanning channel : %u", sniff_status.current_channel);
-    else snprintf(status_str, 30, "Testing address : %s", sniff_status.tested_addr);
+    if(sniff_status.current_channel != 0) snprintf(status_str, sizeof(status_str), "Scanning channel : %u", sniff_status.current_channel);
+    else snprintf(status_str, sizeof(status_str), "Testing address : %s", sniff_status.tested_addr);
     canvas_draw_str_aligned(canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
     // find address
     line_num++;
-    if(strncmp(sniff_status.last_find_addr, EMPTY_HEX, 10) == 0)
+    if(confirmed_idx == 0) {
         strcpy(status_str, "Address found : NONE");
-    else
-        snprintf(status_str, 30, "Address found : %s", sniff_status.last_find_addr);
+        confirmed_idx_draw = 0;
+    }
+    else {
+        char hex_addr[11];
+        hexlify(confirmed[confirmed_idx_draw], MAX_MAC_SIZE, hex_addr);
+        snprintf(status_str, sizeof(status_str), "Address found : %s", hex_addr);
+    }
     canvas_draw_str_aligned(canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
     line_num++;
     // counters
-    snprintf(status_str, 30, "Found : %u    |    New : %u", sniff_status.addr_find_count, sniff_status.addr_new_count);
+    snprintf(status_str, sizeof(status_str), "Found : %u    |    New : %u", sniff_status.addr_find_count, sniff_status.addr_new_count);
     canvas_draw_str_aligned(canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
 }
 
@@ -107,7 +113,7 @@ static void input_setting(InputEvent* event, Nrf24Tool* context) {
         {
             context->tool_running = true;
             context->currentMode = MODE_SNIFF_RUN;
-            nrf24_sniff(context);
+            furi_thread_start(context->sniff_thread);
         }
         break;
 
@@ -126,17 +132,34 @@ static void input_setting(InputEvent* event, Nrf24Tool* context) {
 static void input_run(InputEvent* event, Nrf24Tool* context) {
 
     switch(event->key) {
-    case InputKeyDown:
+    case InputKeyLeft:
+        if(confirmed_idx_draw > 0) confirmed_idx_draw--;
+        break;
+
+    case InputKeyRight:
+        if(confirmed_idx_draw < (confirmed_idx - 1)) confirmed_idx_draw++;
+        break;
+
+    case InputKeyOk:
+        if(!context->tool_running) {
+            context->tool_running = true;
+            if(furi_thread_get_state(context->sniff_thread) ==  FuriThreadStateStopped)
+                furi_thread_start(context->sniff_thread);
+        }
         break;
 
     case InputKeyBack:
         if(context->tool_running) context->tool_running = false;
-        else context->currentMode = MODE_SNIFF_SETTINGS;
+        else { 
+            context->currentMode = MODE_SNIFF_SETTINGS;
+        }
+        furi_thread_join(context->sniff_thread);
         break;
 
     default:
         break;
     }
+    if(confirmed_idx_draw > (confirmed_idx - 1)) confirmed_idx_draw = (confirmed_idx - 1);
 }
 
 void sniff_draw(Canvas* canvas, Nrf24Tool* context) {

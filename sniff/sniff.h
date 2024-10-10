@@ -20,14 +20,15 @@
 typedef struct SniffStatus {
     uint8_t current_channel;
     char tested_addr[HEX_MAC_LEN];
-    char last_find_addr[HEX_MAC_LEN];
     uint8_t addr_find_count;
     uint8_t addr_new_count;
 } SniffStatus;
 
 extern Setting sniff_defaults[SNIFF_SETTING_COUNT];
 extern SniffStatus sniff_status;
+extern uint8_t confirmed[MAX_CONFIRMED][5]; // first 32 confirmed addresses
+extern uint8_t confirmed_idx;
 
-void nrf24_sniff(Nrf24Tool* context);
+int32_t nrf24_sniff(void* ctx);
 void sniff_draw(Canvas* canvas, Nrf24Tool* context);
 void sniff_input(InputEvent* event, Nrf24Tool* context);

@@ -6,7 +6,6 @@
 #include "libnrf24/nrf24.h"
 #include "sniff/sniff.h"
 #include "settings.h"
-#include "input.h"
 
 // Main app variable
 Nrf24Tool* nrf24Tool_app = NULL;
@@ -174,6 +173,18 @@ static void input_callback(InputEvent* event, void* ctx) {
     furi_message_queue_put(context->event_queue, event, FuriWaitForever);
 }
 
+static void inputHandler(InputEvent* event, Nrf24Tool* context) {
+    switch(context->currentMode) {
+    case MODE_SNIFF_SETTINGS:
+    case MODE_SNIFF_RUN:
+        sniff_input(event, context);
+        break;
+
+    default:
+        break;
+    }
+}
+
 /* Allocate the memory and initialise the variables */
 static Nrf24Tool* nrf24Tool_alloc(void) {
     Nrf24Tool* context = malloc(sizeof(Nrf24Tool));
@@ -188,6 +199,10 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
     gui_add_view_port(context->gui, context->view_port, GuiLayerFullscreen);
     view_port_enabled_set(context->view_port, true);
 
+    context->sniff_thread = furi_thread_alloc_ex("Sniff", 1024, nrf24_sniff, context);
+
+    context->notification = furi_record_open(RECORD_NOTIFICATION);
+
     return context;
 }
 
@@ -195,11 +210,16 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
 static void nrf24Tool_free(Nrf24Tool* context) {
     view_port_enabled_set(context->view_port, false);
     gui_remove_view_port(context->gui, context->view_port);
-
-    furi_message_queue_free(context->event_queue);
+    furi_record_close(RECORD_GUI);
     view_port_free(context->view_port);
 
-    furi_record_close(RECORD_GUI);
+    furi_message_queue_free(context->event_queue);
+    
+    furi_thread_free(context->sniff_thread);
+
+    furi_record_close(RECORD_NOTIFICATION);
+
+    free(context);
 }
 
 /* Starts the reader thread and handles the input */
@@ -215,9 +235,16 @@ static void nrf24Tool_run(Nrf24Tool* context) {
     /* Endless main program loop */
     context->app_running = true;
     while(context->app_running) {
-        
-        // handle input actions
-        handleEvent(context);
+        InputEvent event;
+        const FuriStatus status =
+            furi_message_queue_get(context->event_queue, &event, FuriWaitForever);
+
+        if((status != FuriStatusOk) ||
+           (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
+            continue;
+        }
+        // make inputs actions
+        inputHandler(&event, context);
     }
 
     // Deinitialize the nRF24 module

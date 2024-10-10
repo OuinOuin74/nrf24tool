@@ -1,7 +1,7 @@
 #include "sniff.h"
-#include "../input.h"
 #include "../helper.h"
 #include "../libnrf24/nrf24.h"
+#include "notification/notification_messages.h"
 #include "stream/file_stream.h"
 
 //#define LOG_TAG "NRF24_sniff"
@@ -117,14 +117,10 @@ static void insert_addr(uint8_t* addr, uint8_t addr_size) {
 }
 
 static bool previously_confirmed(uint8_t* addr) {
-    bool found = false;
     for(int i = 0; i < MAX_CONFIRMED; i++) {
-        if(!memcmp(confirmed[i], addr, MAX_MAC_SIZE)) {
-            found = true;
-            break;
-        }
+        if(memcmp(confirmed[i], addr, MAX_MAC_SIZE) == 0) return true;
     }
-    return found;
+    return false;
 }
 
 static void alt_address(uint8_t* addr, uint8_t* altaddr) {
@@ -179,8 +175,10 @@ static bool nrf24_sniff_address(uint8_t* address, bool rpd) {
         nrf24_read_reg(REG_RPD, &rpd_value, 1);
         if((rpd_value & 0x01) || !rpd) {
             if(validate_address(packet)) {
-                for(uint8_t i = 0; i < ADDR_WIDTH_5_BYTES; i++)
-                    address[i] = packet[ADDR_WIDTH_5_BYTES - 1 - i];
+                uint8_t j = MAX_MAC_SIZE - 1;
+                for(uint8_t i = 0; i < MAX_MAC_SIZE; i++) {
+                    address[i] = packet[j - i];
+                }
                 return true;
             }
         }
@@ -242,6 +240,7 @@ static void wrap_up(Nrf24Tool* context) {
         FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
         if(ch > max_channel) {
             alt_address(addr, altaddr);
+            if(previously_confirmed(altaddr)) continue;
             hexlify(altaddr, 5, trying);
             FURI_LOG_I(LOG_TAG, "trying alternate address %s", trying);
             memcpy(sniff_status.tested_addr, trying, HEX_MAC_LEN);
@@ -254,14 +253,13 @@ static void wrap_up(Nrf24Tool* context) {
         if(ch <= max_channel) {
             hexlify(addr, 5, top_address);
             FURI_LOG_I(LOG_TAG, "Address found ! : %s", top_address);
-            memcpy(sniff_status.last_find_addr, top_address, HEX_MAC_LEN);
             if(confirmed_idx < MAX_CONFIRMED) {
                 memcpy(confirmed[confirmed_idx++], addr, ADDR_WIDTH_5_BYTES);
                 stream_write_format(context->stream, "%s\n", top_address);
+                notification_message(context->notification, &sequence_double_vibro);
             }
             sniff_status.addr_find_count = confirmed_idx;
             sniff_status.addr_new_count++;
-            break;
         }
     }
 }
@@ -283,7 +281,7 @@ static bool load_file(Nrf24Tool* context)
         }
         else {
             FuriString* line = furi_string_alloc();
-            stream_seek(context->stream, 0, StreamOffsetFromStart);
+            stream_rewind(context->stream);
             while(stream_read_line(context->stream, line)) {
                 // copy previously find adresse
                 size_t line_lenght = furi_string_size(line);
@@ -291,7 +289,11 @@ static bool load_file(Nrf24Tool* context)
                 if(confirmed_idx < MAX_CONFIRMED) {
                     uint8_t addr[MAX_MAC_SIZE];
                     unhexlify(furi_string_get_cstr(line), (line_lenght - 1) / 2, addr);
-                    memcpy(confirmed[confirmed_idx++], addr, MAX_MAC_SIZE);
+                    if(!previously_confirmed(addr)) memcpy(confirmed[confirmed_idx++], addr, MAX_MAC_SIZE);
+                    else { // delete duplicate address in file
+                        stream_seek(context->stream, line_lenght * (-1), StreamOffsetFromCurrent);
+                        stream_delete(context->stream, line_lenght);
+                    }
                 } else {
                     FURI_LOG_E(LOG_TAG, "Sniffing : confirmed buffer overflow!");
                     return false;
@@ -306,7 +308,9 @@ static bool load_file(Nrf24Tool* context)
     return false;
 }
 
-void nrf24_sniff(Nrf24Tool* context) {
+int32_t nrf24_sniff(void* ctx) {
+    Nrf24Tool* context = (Nrf24Tool*)ctx;
+
     uint8_t address[MAX_MAC_SIZE];
     uint32_t start = 0;
     Setting* setting = context->settings->sniff_settings;
@@ -315,7 +319,6 @@ void nrf24_sniff(Nrf24Tool* context) {
     uint8_t target_channel = min_channel;
 
     memcpy(sniff_status.tested_addr, EMPTY_HEX, HEX_MAC_LEN);
-    memcpy(sniff_status.last_find_addr, EMPTY_HEX, HEX_MAC_LEN);
     memset(candidates, 0, sizeof(candidates));
     memset(counts, 0, sizeof(counts));
     memset(confirmed, 0, sizeof(confirmed));
@@ -330,7 +333,7 @@ void nrf24_sniff(Nrf24Tool* context) {
         file_stream_close(context->stream);
         stream_free(context->stream);
         furi_record_close(RECORD_STORAGE);
-        return;
+        return 1;
     }
 
     sniff.channel = target_channel;
@@ -348,6 +351,7 @@ void nrf24_sniff(Nrf24Tool* context) {
                 idx = get_addr_index(address, 5);
                 hexlify(address, 5, top_address);
                 FURI_LOG_I(LOG_TAG, "address finded : %s", top_address);
+                notification_message(context->notification, &sequence_blink_blue_10);
                 if(idx == -1)
                     insert_addr(address, 5);
                 else {
@@ -374,11 +378,13 @@ void nrf24_sniff(Nrf24Tool* context) {
             start = furi_get_tick();
         }
 
-        // handle input actions
-        handleEvent(context);
+        // delay for main thread
+        furi_delay_ms(100);
     }
     // close addresses file
     file_stream_close(context->stream);
     stream_free(context->stream);
     furi_record_close(RECORD_STORAGE);
+
+    return 0;
 }

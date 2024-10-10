@@ -4,6 +4,8 @@
 char EMPTY_HEX[HEX_MAC_LEN] = "0000000000";
 
 void hexlify(uint8_t* in, uint8_t size, char* out) {
+    if(size > MAX_MAC_SIZE) return;
+
     const char hex_digits[] = "0123456789ABCDEF";
 
     for(int i = 0; i < size; i++) {
@@ -14,6 +16,8 @@ void hexlify(uint8_t* in, uint8_t size, char* out) {
 }
 
 void unhexlify(const char* in, uint8_t size, uint8_t* out) {
+    if(size > MAX_MAC_SIZE) return;
+
     for(int i = 0; i < size; i++) {
         char high_nibble = toupper(in[i * 2]);
         char low_nibble = toupper(in[i * 2 + 1]);
@@ -36,7 +40,7 @@ const char* setting_value_to_string(Setting setting, char* buffer, size_t buffer
         snprintf(buffer, buffer_size, "%lu", setting.value.u32);
         break;
     case SETTING_TYPE_BOOL:
-        snprintf(buffer, buffer_size, "%s", setting.value.b ? "true" : "false");
+        snprintf(buffer, buffer_size, "%s", setting.value.b ? "ON" : "OFF");
         break;
     case SETTING_TYPE_DATA_RATE:
         switch(setting.value.d_r) {

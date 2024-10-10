@@ -257,6 +257,7 @@ static void wrap_up(Nrf24Tool* context) {
                 memcpy(confirmed[confirmed_idx++], addr, ADDR_WIDTH_5_BYTES);
                 stream_write_format(context->stream, "%s\n", top_address);
                 notification_message(context->notification, &sequence_double_vibro);
+                notification_message(context->notification, &sequence_display_backlight_on);
             }
             sniff_status.addr_find_count = confirmed_idx;
             sniff_status.addr_new_count++;

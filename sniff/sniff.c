@@ -40,7 +40,7 @@ Setting sniff_defaults[] = {
      .type = SETTING_TYPE_UINT16,
      .value.u16 = DEFAULT_SCANTIME,
      .min = 500,
-     .max = 5000,
+     .max = 10000,
      .step = 500},
     {.name = "Data Rate",
      .type = SETTING_TYPE_DATA_RATE,
@@ -56,7 +56,7 @@ Setting sniff_defaults[] = {
      .step = 1}
 };
 
-NRF24L01_Config sniff = {
+NRF24L01_Config sniff_config = {
     .channel = DEFAULT_MIN_CHANNEL,
     .data_rate = DATA_RATE_2MBPS,
     .tx_power = TX_POWER_0DBM,
@@ -71,22 +71,6 @@ NRF24L01_Config sniff = {
     .tx_addr = NULL,
     .rx_addr = {preamble, NULL, NULL, NULL, NULL, NULL},
     .payload_size = {MAX_PAYLOAD_SIZE, 0, 0, 0, 0, 0}};
-
-NRF24L01_Config find_channel_config = {
-    .channel = 0,
-    .data_rate = DATA_RATE_2MBPS,
-    .tx_power = TX_POWER_0DBM,
-    .crc_length = 2,
-    .mac_len = ADDR_WIDTH_5_BYTES,
-    .arc = 15,
-    .ard = 500,
-    .auto_ack = {true, false, false, false, false, false},
-    .dynamic_payload = {true, false, false, false, false, false},
-    .ack_payload = false,
-    .tx_no_ack = false,
-    .tx_addr = NULL,
-    .rx_addr = {NULL, NULL, NULL, NULL, NULL, NULL},
-    .payload_size = {0, 0, 0, 0, 0, 0}};
 
 static int get_addr_index(uint8_t* addr, uint8_t addr_size) {
     for(uint32_t i = 0; i < total_candidates; i++) {
@@ -184,33 +168,6 @@ static bool nrf24_sniff_address(uint8_t* address, bool rpd) {
         }
     }
     return false;
-}
-
-static uint8_t nrf24_find_channel(
-    uint8_t* srcmac,
-    uint8_t* dstmac,
-    nrf24_addr_width maclen,
-    nrf24_data_rate rate,
-    uint8_t min_channel,
-    uint8_t max_channel) {
-    uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f};
-    uint8_t ch;
-
-    find_channel_config.data_rate = rate;
-    find_channel_config.rx_addr[0] = srcmac;
-    find_channel_config.tx_addr = dstmac;
-    find_channel_config.mac_len = maclen;
-    find_channel_config.channel = min_channel;
-
-    nrf24_configure(&find_channel_config);
-
-    for(ch = min_channel; ch <= max_channel; ch++) {
-        nrf24_set_chan(ch);
-        if(nrf24_txpacket(ping_packet, FIND_CHANNEL_PAYLOAD_SIZE, find_channel_config.tx_no_ack))
-            return ch;
-    }
-
-    return max_channel + 1; // Échec
 }
 
 static void wrap_up(Nrf24Tool* context) {
@@ -337,9 +294,9 @@ int32_t nrf24_sniff(void* ctx) {
         return 1;
     }
 
-    sniff.channel = target_channel;
-    sniff.data_rate = context->settings->sniff_settings[SNIFF_SETTING_DATA_RATE].value.d_r;
-    nrf24_configure(&sniff);
+    sniff_config.channel = target_channel;
+    sniff_config.data_rate = context->settings->sniff_settings[SNIFF_SETTING_DATA_RATE].value.d_r;
+    nrf24_configure(&sniff_config);
     sniff_status.current_channel = target_channel;
 
     start = furi_get_tick();
@@ -370,9 +327,9 @@ int32_t nrf24_sniff(void* ctx) {
             if(target_channel > max_channel) target_channel = min_channel;
 
             wrap_up(context);
-            sniff.channel = target_channel;
+            sniff_config.channel = target_channel;
             memcpy(sniff_status.tested_addr, EMPTY_HEX, HEX_MAC_LEN);
-            nrf24_configure(&sniff);
+            nrf24_configure(&sniff_config);
             nrf24_set_mode(MODE_RX);
             sniff_status.current_channel = target_channel;
             FURI_LOG_I(LOG_TAG, "new channel : %d", nrf24_get_chan());

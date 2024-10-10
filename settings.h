@@ -22,6 +22,11 @@ typedef enum {
 } SniffSettingIndex;
 
 typedef enum {
+    BADMOUSE_SETTING_ADDR_INDEX,
+    BADMOUSE_SETTING_KB_LAYOUT,
+    BADMOUSE_SETTING_MIN_CHANNEL,
+    BADMOUSE_SETTING_MAX_CHANNEL,
+    BADMOUSE_SETTING_DATA_RATE,
     BADMOUSE_SETTING_COUNT
 } BadmouseSettingIndex;
 
@@ -39,6 +44,7 @@ typedef enum {
     SETTING_TYPE_DATA_RATE,
     SETTING_TYPE_TX_POWER,
     SETTING_TYPE_ADDR_WIDTH,
+    SETTING_TYPE_STRING,
 } SettingType;
 
 typedef union {
@@ -49,6 +55,7 @@ typedef union {
     nrf24_data_rate d_r;
     nrf24_tx_power t_p;
     nrf24_addr_width a_w;
+    char str[50];
 } SettingValue;
 
 typedef struct {
@@ -61,8 +68,10 @@ typedef struct {
 } Setting;
 
 typedef struct Settings {
+    Setting rx_settings[RX_SETTING_COUNT];
+    Setting tx_settings[TX_SETTING_COUNT];
     Setting sniff_settings[SNIFF_SETTING_COUNT];
-
+    Setting badmouse_settings[BADMOUSE_SETTING_COUNT];
 } Settings;
 
 typedef struct {

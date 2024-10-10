@@ -7,7 +7,7 @@
 #include <notification/notification.h>
 #include <stream/stream.h>
 #include <furi/core/thread.h>
-
+#include <dialogs/dialogs.h>
 
 #include "libnrf24/nrf24.h"
 #include "settings.h"
@@ -36,8 +36,9 @@ typedef struct Nrf24Tool {
     Storage* storage;
     Stream* stream;
     NotificationApp* notification;
-    FuriMutex* mutex;
+    DialogMessage* dialogs;
     FuriThread* sniff_thread;
+    FuriThread* badmouse_thread;
     Mode currentMode;
     Settings* settings;
     bool app_running;

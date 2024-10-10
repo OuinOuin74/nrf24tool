@@ -54,7 +54,14 @@ static bool load_setting(Nrf24Tool* context) {
                 // find parameter name in settings map
                 for(uint8_t i = 0; i < SETTINGS_QTY; i++) {
                     if(furi_string_cmp_str(key, settings_map[i].key) == 0) {
-                        int value_int = atoi(furi_string_get_cstr(value));
+                        // Fetch the string value
+                        const char* value_str = furi_string_get_cstr(value);
+
+                        // Handle conversion for numeric types only
+                        int value_int = 0;
+                        if(settings_map[i].type != SETTING_TYPE_STRING)
+                            value_int = atoi(value_str); // Only convert to int if it's not a string
+
                         switch(settings_map[i].type) {
                         case SETTING_TYPE_UINT8:
                             *((uint8_t*)settings_map[i].target) = (uint8_t)value_int;
@@ -79,6 +86,9 @@ static bool load_setting(Nrf24Tool* context) {
                             break;
                         case SETTING_TYPE_ADDR_WIDTH:
                             *((nrf24_addr_width*)settings_map[i].target) = (uint8_t)value_int;
+                            break;
+                        case SETTING_TYPE_STRING:
+                            strncpy((char*)settings_map[i].target, value_str, furi_string_size(value));
                             break;
                         }
                     }
@@ -134,6 +144,9 @@ static bool save_setting(Nrf24Tool* context) {
             case SETTING_TYPE_ADDR_WIDTH:
                 stream_write_format(
                 stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
+                continue;
+            case SETTING_TYPE_STRING:
+                stream_write_format(stream, "%s=%s\n", settings_map[i].key, (char*)settings_map[i].target);
                 continue;
             }
         }
@@ -202,6 +215,7 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
     context->sniff_thread = furi_thread_alloc_ex("Sniff", 1024, nrf24_sniff, context);
 
     context->notification = furi_record_open(RECORD_NOTIFICATION);
+    context->dialogs = dialog_message_alloc();
 
     return context;
 }
@@ -218,6 +232,7 @@ static void nrf24Tool_free(Nrf24Tool* context) {
     furi_thread_free(context->sniff_thread);
 
     furi_record_close(RECORD_NOTIFICATION);
+    dialog_message_free(context->dialogs);
 
     free(context);
 }

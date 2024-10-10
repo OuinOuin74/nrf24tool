@@ -4,6 +4,22 @@
 
 uint8_t EMPTY_MAC[] = {0, 0, 0, 0, 0};
 
+NRF24L01_Config find_channel_config = {
+    .channel = 0,
+    .data_rate = DATA_RATE_2MBPS,
+    .tx_power = TX_POWER_0DBM,
+    .crc_length = 2,
+    .mac_len = ADDR_WIDTH_5_BYTES,
+    .arc = 15,
+    .ard = 500,
+    .auto_ack = {true, false, false, false, false, false},
+    .dynamic_payload = {true, false, false, false, false, false},
+    .ack_payload = false,
+    .tx_no_ack = false,
+    .tx_addr = NULL,
+    .rx_addr = {NULL, NULL, NULL, NULL, NULL, NULL},
+    .payload_size = {0, 0, 0, 0, 0, 0}};
+
 char LOG_TAG[] = "libNRF24";
 
 void nrf24_init() {
@@ -409,11 +425,32 @@ void nrf24_configure(NRF24L01_Config* config) {
 }
 
 bool nrf24_check_connected() {
-    uint8_t status = nrf24_status();
+    return (nrf24_status() != 0x00);
+}
 
-    if(status != 0x00) {
-        return true;
-    } else {
-        return false;
+uint8_t nrf24_find_channel(
+    uint8_t* srcmac,
+    uint8_t* dstmac,
+    nrf24_addr_width maclen,
+    nrf24_data_rate rate,
+    uint8_t min_channel,
+    uint8_t max_channel) {
+    uint8_t ping_packet[] = {0x0f, 0x0f, 0x0f, 0x0f};
+    uint8_t ch;
+
+    find_channel_config.data_rate = rate;
+    find_channel_config.rx_addr[0] = srcmac;
+    find_channel_config.tx_addr = dstmac;
+    find_channel_config.mac_len = maclen;
+    find_channel_config.channel = min_channel;
+
+    nrf24_configure(&find_channel_config);
+
+    for(ch = min_channel; ch <= max_channel; ch++) {
+        nrf24_set_chan(ch);
+        if(nrf24_txpacket(ping_packet, FIND_CHANNEL_PAYLOAD_SIZE, find_channel_config.tx_no_ack))
+            return ch;
     }
+
+    return max_channel + 1; // Échec
 }

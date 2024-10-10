@@ -15,7 +15,6 @@
 #define DEFAULT_MIN_CHANNEL      2
 #define DEFAULT_SCANTIME          4000
 #define COUNT_THRESHOLD           2
-#define FIND_CHANNEL_PAYLOAD_SIZE 4
 
 typedef struct SniffStatus {
     uint8_t current_channel;

@@ -62,6 +62,7 @@
 #define nrf24_TIMEOUT 500
 #define nrf24_CE_PIN  &gpio_ext_pb2
 #define nrf24_HANDLE  furi_hal_spi_bus_handle_external
+#define FIND_CHANNEL_PAYLOAD_SIZE 4
 
 // Data rate options
 #define DATA_RATE_1MBPS ((uint8_t)0) // 1 Mbps (default)
@@ -313,3 +314,11 @@ bool nrf24_txpacket(uint8_t* payload, uint8_t size, bool no_ack);
 void nrf24_configure(NRF24L01_Config* config);
 
 bool nrf24_check_connected();
+
+uint8_t nrf24_find_channel(
+    uint8_t* srcmac,
+    uint8_t* dstmac,
+    nrf24_addr_width maclen,
+    nrf24_data_rate rate,
+    uint8_t min_channel,
+    uint8_t max_channel);

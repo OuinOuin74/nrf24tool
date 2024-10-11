@@ -33,4 +33,7 @@ SettingMapping settings_map[] = {
      {"badmouse_data_rate",
      &nrf24Tool_settings.badmouse_settings[BADMOUSE_SETTING_DATA_RATE].value.d_r,
      SETTING_TYPE_DATA_RATE},
+     {"badmouse_tx_power",
+     &nrf24Tool_settings.badmouse_settings[BADMOUSE_SETTING_TX_POWER].value.t_p,
+     SETTING_TYPE_TX_POWER},
 };

@@ -6,7 +6,7 @@ extern "C" {
 
 #include <furi.h>
 #include <furi_hal.h>
-#include "bad_usb_hid.h"
+#include "badmouse_hid.h"
 
 typedef enum {
     BadUsbStateInit,
@@ -32,23 +32,23 @@ typedef struct {
     char error[64];
 } BadUsbState;
 
-typedef struct BadUsbScript BadUsbScript;
+typedef struct BadMouse BadMouse;
 
-BadUsbScript* bad_usb_script_open(FuriString* file_path);
+BadMouse* bad_usb_script_open(FuriString* file_path);
 
-void bad_usb_script_close(BadUsbScript* bad_usb);
+void bad_usb_script_close(BadMouse* bad_usb);
 
-void bad_usb_script_set_keyboard_layout(BadUsbScript* bad_usb, FuriString* layout_path);
+void bad_usb_script_set_keyboard_layout(BadMouse* bad_usb, FuriString* layout_path);
 
-void bad_usb_script_start(BadUsbScript* bad_usb);
+void bad_usb_script_start(BadMouse* bad_usb);
 
-void bad_usb_script_stop(BadUsbScript* bad_usb);
+void bad_usb_script_stop(BadMouse* bad_usb);
 
-void bad_usb_script_start_stop(BadUsbScript* bad_usb);
+void bad_usb_script_start_stop(BadMouse* bad_usb);
 
-void bad_usb_script_pause_resume(BadUsbScript* bad_usb);
+void bad_usb_script_pause_resume(BadMouse* bad_usb);
 
-BadUsbState* bad_usb_script_get_state(BadUsbScript* bad_usb);
+BadUsbState* bad_usb_script_get_state(BadMouse* bad_usb);
 
 #ifdef __cplusplus
 }

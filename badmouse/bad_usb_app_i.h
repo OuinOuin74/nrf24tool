@@ -39,7 +39,7 @@ struct BadUsbApp {
     FuriString* file_path;
     FuriString* keyboard_layout;
     BadUsb* bad_usb_view;
-    BadUsbScript* bad_usb_script;
+    BadMouse* bad_usb_script;
 
     FuriHalUsbInterface* usb_if_prev;
 };

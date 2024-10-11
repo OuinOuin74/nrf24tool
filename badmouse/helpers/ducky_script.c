@@ -3,11 +3,11 @@
 #include <gui/gui.h>
 #include <input/input.h>
 #include <lib/toolbox/args.h>
-#include <lib/toolbox/strint.h>
 #include <storage/storage.h>
 #include "ducky_script.h"
 #include "ducky_script_i.h"
 #include <dolphin/dolphin.h>
+#include "badmouse_hid.h"
 
 #define TAG "BadUsb"
 
@@ -51,7 +51,7 @@ bool ducky_is_line_end(const char chr) {
     return (chr == ' ') || (chr == '\0') || (chr == '\r') || (chr == '\n');
 }
 
-uint16_t ducky_get_keycode(BadUsbScript* bad_usb, const char* param, bool accept_chars) {
+uint16_t ducky_get_keycode(BadMouse* bad_usb, const char* param, bool accept_chars) {
     uint16_t keycode = ducky_get_keycode_by_name(param);
     if(keycode != HID_KEYBOARD_NONE) {
         return keycode;
@@ -63,23 +63,27 @@ uint16_t ducky_get_keycode(BadUsbScript* bad_usb, const char* param, bool accept
     return 0;
 }
 
-bool ducky_get_number(const char* param, uint32_t* val) {
+/* bool ducky_get_number(const char* param, uint32_t* val) {
     uint32_t value = 0;
     if(strint_to_uint32(param, NULL, &value, 10) == StrintParseNoError) {
         *val = value;
         return true;
     }
     return false;
-}
+} */
 
-void ducky_numlock_on(BadUsbScript* bad_usb) {
-    if((bad_usb->hid->get_led_state(bad_usb->hid_inst) & HID_KB_LED_NUM) == 0) {
-        bad_usb->hid->kb_press(bad_usb->hid_inst, HID_KEYBOARD_LOCK_NUM_LOCK);
-        bad_usb->hid->kb_release(bad_usb->hid_inst, HID_KEYBOARD_LOCK_NUM_LOCK);
+bool ducky_get_number(const char* param, uint32_t* val) {
+    char* endptr;
+    unsigned long value = strtoul(param, &endptr, 10);
+
+    if(*endptr == '\0' && value <= UINT32_MAX) {
+        *val = (uint32_t)value;
+        return true;
     }
+    return false;
 }
 
-bool ducky_numpad_press(BadUsbScript* bad_usb, const char num) {
+bool ducky_numpad_press(BadMouse* bad_usb, const char num) {
     if((num < '0') || (num > '9')) return false;
 
     uint16_t key = numpad_keys[num - '0'];
@@ -89,11 +93,12 @@ bool ducky_numpad_press(BadUsbScript* bad_usb, const char num) {
     return true;
 }
 
-bool ducky_altchar(BadUsbScript* bad_usb, const char* charcode) {
+bool ducky_altchar(BadMouse* bad_usb, const char* charcode) {
     uint8_t i = 0;
     bool state = false;
 
-    bad_usb->hid->kb_press(bad_usb->hid_inst, KEY_MOD_LEFT_ALT);
+    //bad_usb->hid->kb_press(bad_usb->hid_inst, KEY_MOD_LEFT_ALT);
+    badmouse_currentModKey |= KEY_MOD_LEFT_ALT;
 
     while(!ducky_is_line_end(charcode[i])) {
         state = ducky_numpad_press(bad_usb, charcode[i]);
@@ -101,11 +106,12 @@ bool ducky_altchar(BadUsbScript* bad_usb, const char* charcode) {
         i++;
     }
 
-    bad_usb->hid->kb_release(bad_usb->hid_inst, KEY_MOD_LEFT_ALT);
+    //bad_usb->hid->kb_release(bad_usb->hid_inst, KEY_MOD_LEFT_ALT);
+    badmouse_currentModKey &= ~(KEY_MOD_LEFT_ALT);
     return state;
 }
 
-bool ducky_altstring(BadUsbScript* bad_usb, const char* param) {
+bool ducky_altstring(BadMouse* bad_usb, const char* param) {
     uint32_t i = 0;
     bool state = false;
 
@@ -125,7 +131,7 @@ bool ducky_altstring(BadUsbScript* bad_usb, const char* param) {
     return state;
 }
 
-int32_t ducky_error(BadUsbScript* bad_usb, const char* text, ...) {
+int32_t ducky_error(BadMouse* bad_usb, const char* text, ...) {
     va_list args;
     va_start(args, text);
 
@@ -135,7 +141,7 @@ int32_t ducky_error(BadUsbScript* bad_usb, const char* text, ...) {
     return SCRIPT_STATE_ERROR;
 }
 
-bool ducky_string(BadUsbScript* bad_usb, const char* param) {
+bool ducky_string(BadMouse* bad_usb, const char* param) {
     uint32_t i = 0;
 
     while(param[i] != '\0') {
@@ -155,7 +161,7 @@ bool ducky_string(BadUsbScript* bad_usb, const char* param) {
     return true;
 }
 
-static bool ducky_string_next(BadUsbScript* bad_usb) {
+static bool ducky_string_next(BadMouse* bad_usb) {
     if(bad_usb->string_print_pos >= furi_string_size(bad_usb->string_print)) {
         return true;
     }
@@ -178,7 +184,7 @@ static bool ducky_string_next(BadUsbScript* bad_usb) {
     return false;
 }
 
-static int32_t ducky_parse_line(BadUsbScript* bad_usb, FuriString* line) {
+static int32_t ducky_parse_line(BadMouse* bad_usb, FuriString* line) {
     uint32_t line_len = furi_string_size(line);
     const char* line_tmp = furi_string_get_cstr(line);
 
@@ -208,7 +214,7 @@ static int32_t ducky_parse_line(BadUsbScript* bad_usb, FuriString* line) {
     return 0;
 }
 
-static bool ducky_set_usb_id(BadUsbScript* bad_usb, const char* line) {
+static bool ducky_set_usb_id(BadMouse* bad_usb, const char* line) {
     if(sscanf(line, "%lX:%lX", &bad_usb->hid_cfg.vid, &bad_usb->hid_cfg.pid) == 2) {
         bad_usb->hid_cfg.manuf[0] = '\0';
         bad_usb->hid_cfg.product[0] = '\0';
@@ -235,7 +241,7 @@ static bool ducky_set_usb_id(BadUsbScript* bad_usb, const char* line) {
 
 static void bad_usb_hid_state_callback(bool state, void* context) {
     furi_assert(context);
-    BadUsbScript* bad_usb = context;
+    BadMouse* bad_usb = context;
 
     if(state == true) {
         furi_thread_flags_set(furi_thread_get_id(bad_usb->thread), WorkerEvtConnect);
@@ -244,7 +250,7 @@ static void bad_usb_hid_state_callback(bool state, void* context) {
     }
 }
 
-static bool ducky_script_preload(BadUsbScript* bad_usb, File* script_file) {
+static bool ducky_script_preload(BadMouse* bad_usb, File* script_file) {
     uint8_t ret = 0;
     uint32_t line_len = 0;
 
@@ -290,7 +296,7 @@ static bool ducky_script_preload(BadUsbScript* bad_usb, File* script_file) {
     return true;
 }
 
-static int32_t ducky_script_execute_next(BadUsbScript* bad_usb, File* script_file) {
+static int32_t ducky_script_execute_next(BadMouse* bad_usb, File* script_file) {
     int32_t delay_val = 0;
 
     if(bad_usb->repeat_cnt > 0) {
@@ -373,7 +379,7 @@ static uint32_t bad_usb_flags_get(uint32_t flags_mask, uint32_t timeout) {
 }
 
 static int32_t bad_usb_worker(void* context) {
-    BadUsbScript* bad_usb = context;
+    BadMouse* bad_usb = context;
 
     BadUsbWorkerState worker_state = BadUsbStateInit;
     BadUsbWorkerState pause_state = BadUsbStateRunning;
@@ -644,16 +650,16 @@ static int32_t bad_usb_worker(void* context) {
     return 0;
 }
 
-static void bad_usb_script_set_default_keyboard_layout(BadUsbScript* bad_usb) {
+static void bad_usb_script_set_default_keyboard_layout(BadMouse* bad_usb) {
     furi_assert(bad_usb);
     memset(bad_usb->layout, HID_KEYBOARD_NONE, sizeof(bad_usb->layout));
     memcpy(bad_usb->layout, hid_asciimap, MIN(sizeof(hid_asciimap), sizeof(bad_usb->layout)));
 }
 
-BadUsbScript* bad_usb_script_open(FuriString* file_path) {
+BadMouse* bad_usb_script_open(FuriString* file_path) {
     furi_assert(file_path);
 
-    BadUsbScript* bad_usb = malloc(sizeof(BadUsbScript));
+    BadMouse* bad_usb = malloc(sizeof(BadUsbScript));
     bad_usb->file_path = furi_string_alloc();
     furi_string_set(bad_usb->file_path, file_path);
     bad_usb_script_set_default_keyboard_layout(bad_usb);
@@ -667,7 +673,7 @@ BadUsbScript* bad_usb_script_open(FuriString* file_path) {
     return bad_usb;
 } //-V773
 
-void bad_usb_script_close(BadUsbScript* bad_usb) {
+void bad_usb_script_close(BadMouse* bad_usb) {
     furi_assert(bad_usb);
     furi_thread_flags_set(furi_thread_get_id(bad_usb->thread), WorkerEvtEnd);
     furi_thread_join(bad_usb->thread);
@@ -676,7 +682,7 @@ void bad_usb_script_close(BadUsbScript* bad_usb) {
     free(bad_usb);
 }
 
-void bad_usb_script_set_keyboard_layout(BadUsbScript* bad_usb, FuriString* layout_path) {
+void bad_usb_script_set_keyboard_layout(BadMouse* bad_usb, FuriString* layout_path) {
     furi_assert(bad_usb);
 
     if((bad_usb->st.state == BadUsbStateRunning) || (bad_usb->st.state == BadUsbStateDelay)) {
@@ -700,17 +706,17 @@ void bad_usb_script_set_keyboard_layout(BadUsbScript* bad_usb, FuriString* layou
     storage_file_free(layout_file);
 }
 
-void bad_usb_script_start_stop(BadUsbScript* bad_usb) {
+void bad_usb_script_start_stop(BadMouse* bad_usb) {
     furi_assert(bad_usb);
     furi_thread_flags_set(furi_thread_get_id(bad_usb->thread), WorkerEvtStartStop);
 }
 
-void bad_usb_script_pause_resume(BadUsbScript* bad_usb) {
+void bad_usb_script_pause_resume(BadMouse* bad_usb) {
     furi_assert(bad_usb);
     furi_thread_flags_set(furi_thread_get_id(bad_usb->thread), WorkerEvtPauseResume);
 }
 
-BadUsbState* bad_usb_script_get_state(BadUsbScript* bad_usb) {
+BadUsbState* bad_usb_script_get_state(BadMouse* bad_usb) {
     furi_assert(bad_usb);
     return &(bad_usb->st);
 }

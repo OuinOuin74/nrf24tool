@@ -3,15 +3,18 @@
 static uint8_t LOGITECH_HID_TEMPLATE[] =
     {0x00, 0xC1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 static uint8_t LOGITECH_HELLO[] = {0x00, 0x4F, 0x00, 0x04, 0xB0, 0x10, 0x00, 0x00, 0x00, 0xED};
-//static uint8_t LOGITECH_KEEPALIVE[] = {0x00, 0x40, 0x00, 0x55, 0x6B};
-uint16_t badmouse_currentKey = 0;
+static uint8_t LOGITECH_KEEPALIVE[] = {0x00, 0x40, 0x00, 0x55, 0x6B};
+static uint8_t EMPTY_HID_CODE[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 #define RT_THRESHOLD               50
-#define LOGITECH_MIN_CHANNEL       2
-#define LOGITECH_MAX_CHANNEL       83
 #define LOGITECH_KEEPALIVE_SIZE    5
 #define LOGITECH_HID_TEMPLATE_SIZE 10
 #define LOGITECH_HELLO_SIZE        10
+#define MAX_HID_KEYS               6
+
+static uint8_t key_mod = 0;
+static uint8_t key_hid[MAX_HID_KEYS] = {0};
+static uint8_t key_num = 0;
 
 static void checksum(uint8_t* payload, size_t len) {
     // This is also from the KeyKeriki paper
@@ -23,31 +26,22 @@ static void checksum(uint8_t* payload, size_t len) {
     payload[len - 1] = cksum;
 }
 
-bool find_channel(Nrf24Tool* context) {
-    uint8_t min_channel =
-        context->settings->badmouse_settings[BADMOUSE_SETTING_MIN_CHANNEL].value.u8;
-    uint8_t max_channel =
-        context->settings->badmouse_settings[BADMOUSE_SETTING_MAX_CHANNEL].value.u8;
-    uint8_t channel = nrf24_find_channel(
-        badmouse_config.tx_addr,
-        badmouse_config.tx_addr,
-        badmouse_config.mac_len,
-        badmouse_config.data_rate,
-        min_channel,
-        max_channel);
-    if(channel <= max_channel) {
-        badmouse_config.channel = channel;
-        return true;
-    }
-    return false;
+uint8_t find_channel(NRF24L01_Config* config) {
+    return nrf24_find_channel(
+        config->tx_addr,
+        config->tx_addr,
+        config->mac_len,
+        config->data_rate,
+        LOGITECH_MIN_CHANNEL,
+        LOGITECH_MAX_CHANNEL);
 }
 
-static bool inject_packet(Nrf24Tool* context, uint8_t* payload, size_t payload_size) {
+static bool inject_packet(NRF24L01_Config* config, uint8_t* payload, size_t payload_size) {
     if(nrf24_txpacket(payload, payload_size, false)) {
         return true;
     }
     // retransmit threshold exceeded, scan for new channel
-    if(find_channel(context)) {
+    if(find_channel(config)) {
         if(nrf24_txpacket(payload, payload_size, false)) {
             return true;
         }
@@ -62,11 +56,46 @@ static bool inject_packet(Nrf24Tool* context, uint8_t* payload, size_t payload_s
     checksum(payload, LOGITECH_HID_TEMPLATE_SIZE);
 }
  */
+static uint8_t find_key(uint8_t key) {
+    for(uint8_t i = 0; i < MAX_HID_KEYS; i++) {
+        if(key_hid[i] == key) return i;
+    }
+    return MAX_HID_KEYS;
+}
 
-static void build_hid_packet(uint16_t hid_code, uint8_t* payload) {
+static uint8_t find_free_pos(uint8_t key) {
+    if(find_key(key) != MAX_HID_KEYS) return MAX_HID_KEYS;
+    for(uint8_t i = 0; i < MAX_HID_KEYS; i++) {
+        if(key_hid[i] == 0x00) return i;
+    }
+    return MAX_HID_KEYS;
+}
+
+static void clear_keys() {
+    // Clear all the pressed keys
+    key_mod = 0;  // Clear all modifier keys
+    memcpy(key_hid, EMPTY_HID_CODE, MAX_HID_KEYS);  // Clear all HID key codes
+}
+/* static void build_hid_packet(uint16_t hid_code, uint8_t* payload) {
     memcpy(payload, LOGITECH_HID_TEMPLATE, LOGITECH_HID_TEMPLATE_SIZE);
     payload[2] = (hid_code >> 8) & 0xFF;
     payload[3] = hid_code & 0xFF;
+    checksum(payload, LOGITECH_HID_TEMPLATE_SIZE);
+} */
+
+static void build_hid_packet(uint8_t* payload) {
+    memcpy(payload, LOGITECH_HID_TEMPLATE, LOGITECH_HID_TEMPLATE_SIZE);
+
+    // Set the modifier byte in the payload (Byte 2)
+    payload[2] = key_mod;
+
+    // Insert up to 6 HID keycodes in the appropriate positions
+    for(uint8_t i = 0; i < MAX_HID_KEYS; i++) {
+        // Start placing key codes at Byte 3
+        payload[3 + i] = key_hid[i]; // Fill in HID codes for up to 6 keys
+    }
+
+    // Calculate the checksum for the packet
     checksum(payload, LOGITECH_HID_TEMPLATE_SIZE);
 }
 
@@ -79,43 +108,92 @@ static void build_hid_packet(uint16_t hid_code, uint8_t* payload) {
     inject_packet(context, hid_payload, LOGITECH_HID_TEMPLATE_SIZE); // empty hid packet
 } */
 
-void bm_release_key(Nrf24Tool* context, uint16_t hid_code) {
+void bm_release_key(NRF24L01_Config* config, uint16_t hid_code) {
     uint8_t hid_payload[LOGITECH_HID_TEMPLATE_SIZE] = {0};
 
-    badmouse_currentKey &= ~(hid_code);
+    // Extract the modifier from the upper byte of hid_code (assuming modifier in upper 8 bits)
+    uint8_t modifier = (hid_code >> 8) & 0xFF;
+    uint8_t key = hid_code & 0xFF;
 
-    build_hid_packet(badmouse_currentKey, hid_payload);
-    inject_packet(context, hid_payload, LOGITECH_HID_TEMPLATE_SIZE);
+    // Remove the modifier if it's present
+    key_mod &= ~modifier;
+
+    // Find the key in the key_hid array and clear it
+    uint8_t key_pos = find_key(key);
+    if(key_pos < MAX_HID_KEYS) {
+        key_hid[key_pos] = 0x00; // Clear the released key
+        key_num--; // Track the number of active keys
+    }
+
+    // Rebuild the HID packet with updated key states
+    build_hid_packet(hid_payload);
+
+    // Send the packet
+    inject_packet(config, hid_payload, LOGITECH_HID_TEMPLATE_SIZE);
 }
 
-void bm_release_all(Nrf24Tool* context) {
+void bm_release_all(NRF24L01_Config* config) {
     uint8_t hid_payload[LOGITECH_HID_TEMPLATE_SIZE] = {0};
 
-    badmouse_currentKey = 0;
+    // Clear all the pressed keys
+    clear_keys();
 
-    build_hid_packet(badmouse_currentKey, hid_payload);
-    inject_packet(context, hid_payload, LOGITECH_HID_TEMPLATE_SIZE); // empty hid packet
+    // Build an empty HID packet
+    build_hid_packet(hid_payload);
+
+    // Send the empty HID packet to release all keys
+    inject_packet(config, hid_payload, LOGITECH_HID_TEMPLATE_SIZE);
 }
 
-bool bm_send_key(Nrf24Tool* context, uint16_t hid_code) {
+bool bm_press_key(NRF24L01_Config* config, uint16_t hid_code) {
     uint8_t hid_payload[LOGITECH_HID_TEMPLATE_SIZE] = {0};
 
-    badmouse_currentKey |= hid_code;
+    // Extract the modifier from the upper byte of hid_code (assuming modifier in upper 8 bits)
+    uint8_t modifier = (hid_code >> 8) & 0xFF;
+    uint8_t key = hid_code & 0xFF;
 
-    build_hid_packet(badmouse_currentKey, hid_payload);
-    if(!inject_packet(context, hid_payload, LOGITECH_HID_TEMPLATE_SIZE)) return false;
+    // Update the modifier keys
+    key_mod |= modifier;
+
+    // Find a free position for the actual key press if it's not a modifier
+    uint8_t free_pos = find_free_pos(key);
+    if(free_pos < MAX_HID_KEYS) {
+        key_hid[free_pos] = key; // Store the new HID code in the free position
+        key_num++; // Track the number of pressed keys
+    }
+
+    // Build the HID packet with up to 6 keys and the modifier
+    build_hid_packet(hid_payload);
+
+    // Send the packet
+    if(!inject_packet(config, hid_payload, LOGITECH_HID_TEMPLATE_SIZE)) {
+        return false;
+    }
+
+    // Small delay for key press processing
     furi_delay_ms(12);
+
     return true;
 }
 
-bool bm_start_transmission(Nrf24Tool* context) {
-    badmouse_currentKey = 0;
-    return inject_packet(context, LOGITECH_HELLO, LOGITECH_HELLO_SIZE);
+bool bm_send_keep_alive(NRF24L01_Config* config) {
+    bool status = inject_packet(config, LOGITECH_KEEPALIVE, LOGITECH_KEEPALIVE_SIZE);
+    furi_delay_ms(10);
+    return status;
 }
 
-bool bm_end_transmission(Nrf24Tool* context) {
+bool bm_start_transmission(NRF24L01_Config* config) {
+    // Clear all the pressed keys
+    clear_keys();
+
+    return inject_packet(config, LOGITECH_HELLO, LOGITECH_HELLO_SIZE);
+}
+
+bool bm_end_transmission(NRF24L01_Config* config) {
     uint8_t hid_payload[LOGITECH_HID_TEMPLATE_SIZE] = {0};
-    build_hid_packet(0, hid_payload);
+    // Clear all the pressed keys
+    clear_keys();
+    build_hid_packet(hid_payload);
     return inject_packet(
-        context, hid_payload, LOGITECH_HID_TEMPLATE_SIZE); // empty hid packet at end
+        config, hid_payload, LOGITECH_HID_TEMPLATE_SIZE); // empty hid packet at end
 }

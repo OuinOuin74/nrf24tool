@@ -94,11 +94,11 @@ static int32_t ducky_fnc_sysrq(BadMouse* badmouse, const char* line, int32_t par
     line = &line[ducky_get_command_len(line) + 1];
     uint16_t key = ducky_get_keycode(badmouse, line, true);
     //badmouse->hid->kb_press(badmouse->hid_inst, KEY_MOD_LEFT_ALT | HID_KEYBOARD_PRINT_SCREEN);
-    bm_send_key(badmouse->context, (KEY_MOD_LEFT_ALT | HID_KEYBOARD_PRINT_SCREEN));
+    bm_press_key(badmouse->config, (KEY_MOD_LEFT_ALT | HID_KEYBOARD_PRINT_SCREEN));
     //badmouse->hid->kb_press(badmouse->hid_inst, key);
-    bm_send_key(badmouse->context, key);
+    bm_press_key(badmouse->config, key);
     //badmouse->hid->release_all(badmouse->hid_inst);
-    bm_release_all(badmouse->context);
+    bm_release_all(badmouse->config);
     return 0;
 }
 
@@ -137,7 +137,7 @@ static int32_t ducky_fnc_hold(BadMouse* badmouse, const char* line, int32_t para
         return ducky_error(badmouse, "Too many keys are hold");
     }
     //badmouse->hid->kb_press(badmouse->hid_inst, key);
-    bm_send_key(badmouse->context, key);
+    bm_press_key(badmouse->config, key);
     return 0;
 }
 
@@ -154,7 +154,7 @@ static int32_t ducky_fnc_release(BadMouse* badmouse, const char* line, int32_t p
     }
     badmouse->key_hold_nb--;
     //badmouse->hid->kb_release(badmouse->hid_inst, key);
-    bm_release_key(badmouse->context, key);
+    bm_release_key(badmouse->config, key);
     return 0;
 }
 
@@ -167,9 +167,9 @@ static int32_t ducky_fnc_media(BadMouse* badmouse, const char* line, int32_t par
         return ducky_error(badmouse, "No keycode defined for %s", line);
     }
     //badmouse->hid->consumer_press(badmouse->hid_inst, key);
-    bm_send_key(badmouse->context, key);
+    bm_press_key(badmouse->config, key);
     //badmouse->hid->consumer_release(badmouse->hid_inst, key);
-    bm_release_key(badmouse->context, key);
+    bm_release_key(badmouse->config, key);
     return 0;
 }
 
@@ -182,10 +182,14 @@ static int32_t ducky_fnc_globe(BadMouse* badmouse, const char* line, int32_t par
         return ducky_error(badmouse, "No keycode defined for %s", line);
     }
 
-    badmouse->hid->consumer_press(badmouse->hid_inst, HID_CONSUMER_FN_GLOBE);
-    badmouse->hid->kb_press(badmouse->hid_inst, key);
-    badmouse->hid->kb_release(badmouse->hid_inst, key);
-    badmouse->hid->consumer_release(badmouse->hid_inst, HID_CONSUMER_FN_GLOBE);
+    //badmouse->hid->consumer_press(badmouse->hid_inst, HID_CONSUMER_FN_GLOBE);
+    bm_press_key(badmouse->config, HID_CONSUMER_FN_GLOBE);
+    //badmouse->hid->kb_press(badmouse->hid_inst, key);
+    bm_press_key(badmouse->config, key);
+    //badmouse->hid->kb_release(badmouse->hid_inst, key);
+    bm_release_key(badmouse->config, key);
+    //badmouse->hid->consumer_release(badmouse->hid_inst, HID_CONSUMER_FN_GLOBE);
+    bm_release_key(badmouse->config, HID_CONSUMER_FN_GLOBE);
     return 0;
 }
 

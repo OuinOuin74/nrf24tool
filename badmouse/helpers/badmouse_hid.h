@@ -4,11 +4,13 @@
 #include "nrf24tool.h"
 #include "libnrf24/nrf24.h"
 
-extern NRF24L01_Config badmouse_config;
+#define LOGITECH_MIN_CHANNEL       2
+#define LOGITECH_MAX_CHANNEL       83
 
-bool find_channel(Nrf24Tool* context);
-bool bm_send_key(Nrf24Tool* context, uint16_t hid_code);
-void bm_release_key(Nrf24Tool* context, uint16_t hid_code);
-void bm_release_all(Nrf24Tool* context);
-bool bm_start_transmission(Nrf24Tool* context);
-bool bm_end_transmission(Nrf24Tool* context);
+uint8_t find_channel(NRF24L01_Config* config);
+bool bm_press_key(NRF24L01_Config* config, uint16_t hid_code);
+void bm_release_key(NRF24L01_Config* config, uint16_t hid_code);
+void bm_release_all(NRF24L01_Config* config);
+bool bm_send_keep_alive(NRF24L01_Config* config);
+bool bm_start_transmission(NRF24L01_Config* config);
+bool bm_end_transmission(NRF24L01_Config* config);

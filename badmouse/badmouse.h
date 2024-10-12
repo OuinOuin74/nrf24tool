@@ -1,25 +1,22 @@
 #pragma once
 
+#include "helpers/badmouse_hid.h"
 #include "gui/modules/variable_item_list.h"
 #include "helpers/ducky_script_i.h"
-
+#include "../nrf24tool.h"
+#include "../libnrf24/nrf24.h"
+#include "../settings.h"
+#include "../helper.h"
 
 #define BAD_USB_APP_BASE_FOLDER        EXT_PATH("badusb")
 #define BAD_USB_APP_PATH_LAYOUT_FOLDER BAD_USB_APP_BASE_FOLDER "/assets/layouts"
 #define BAD_USB_APP_SCRIPT_EXTENSION   ".txt"
 #define BAD_USB_APP_LAYOUT_EXTENSION   ".kl"
-
-typedef enum {
-    BadMouseState_Init,
-    BadMouseState_No_Channel,
-    BadMouseState_Idle,
-    BadMouseState_Run,
-    BadMouseState_Done,
-    BadMouseState_Error,
-} BadMouseState;
+#define MAX_CONFIRMED_ADDR             32
+#define DEFAULT_KB_LAYOUT              "en-US"
 
 typedef struct BadMouse {
-    Nrf24Tool* context;
+    NRF24L01_Config* config;
     VariableItemList* var_item_list;
 
     FuriString* file_path;
@@ -43,3 +40,9 @@ typedef struct BadMouse {
     BadMouseState state;
 
 } BadMouse;
+
+extern Setting badmouse_defaults[BADMOUSE_SETTING_COUNT];
+
+int32_t nrf24_badmouse(void* ctx);
+void badmouse_draw(Canvas* canvas, Nrf24Tool* context);
+void badmouse_input(InputEvent* event, Nrf24Tool* context);

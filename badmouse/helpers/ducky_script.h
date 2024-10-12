@@ -1,36 +1,26 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <furi.h>
 #include <furi_hal.h>
 #include "badmouse_hid.h"
 
 typedef enum {
-    BadUsbStateInit,
-    BadUsbStateNotConnected,
-    BadUsbStateIdle,
-    BadUsbStateWillRun,
-    BadUsbStateRunning,
-    BadUsbStateDelay,
-    BadUsbStateStringDelay,
-    BadUsbStateWaitForBtn,
-    BadUsbStatePaused,
-    BadUsbStateDone,
-    BadUsbStateScriptError,
-    BadUsbStateFileError,
-} BadUsbWorkerState;
+    BadMouseState_Init,
+    BadMouseState_No_Channel,
+    BadMouseState_Idle,
+    BadMouseState_Run,
+    BadMouseState_Done,
+    BadMouseState_Error,
+} BadMouseExecState;
 
 typedef struct {
-    BadUsbWorkerState state;
+    BadMouseExecState state;
     size_t line_cur;
     size_t line_nb;
     uint32_t delay_remain;
     size_t error_line;
     char error[64];
-} BadUsbState;
+} BadMouseState;
 
 typedef struct BadMouse BadMouse;
 
@@ -48,8 +38,3 @@ void bad_usb_script_start_stop(BadMouse* bad_usb);
 
 void bad_usb_script_pause_resume(BadMouse* bad_usb);
 
-BadUsbState* bad_usb_script_get_state(BadMouse* bad_usb);
-
-#ifdef __cplusplus
-}
-#endif

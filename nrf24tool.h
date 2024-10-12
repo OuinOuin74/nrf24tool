@@ -12,12 +12,12 @@
 #include "libnrf24/nrf24.h"
 #include "settings.h"
 
-
-#define LOG_TAG "NRF24SCAN"
-#define MAX_CHANNEL	125
+#define LOG_TAG     "NRF24TOOL"
+#define MAX_CHANNEL 125
+#define TOOL_QTY 4
 
 typedef enum {
-    MODE_RF24_DISCONNECTED,
+    MODE_MENU,
     MODE_RX_SETTINGS,
     MODE_RX_RUN,
     MODE_TX_SETTINGS,
@@ -44,3 +44,6 @@ typedef struct Nrf24Tool {
     bool app_running;
     bool tool_running;
 } Nrf24Tool;
+
+void draw_menu(Canvas* canvas);
+void input_menu(InputEvent* event, Nrf24Tool* context);

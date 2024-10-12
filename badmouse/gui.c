@@ -1,9 +1,8 @@
-#include "sniff.h"
+#include "badmouse.h"
 #include "../helper.h"
 
 static uint8_t user_index = 0;
 static uint8_t draw_index = 0;
-static uint8_t confirmed_idx_draw = 0;
 static const uint8_t ITEMS_ON_SCREEN = 4;
 static const uint8_t start_x = 2;
 static const uint8_t start_y = 14;
@@ -16,13 +15,13 @@ static void draw_settings(Canvas* canvas, Nrf24Tool* context) {
 
     // draw title
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 0, 0, AlignLeft, AlignTop, "Mode : Sniffing");
+    canvas_draw_str_aligned(canvas, 0, 0, AlignLeft, AlignTop, "Mode : Bad Mouse");
     canvas_draw_line(canvas, 0, 10, canvas_width(canvas), 10);
 
     // draw settings
     char value[10];
     canvas_set_font(canvas, FontSecondary);
-    for(uint8_t i = 0; i < SNIFF_SETTING_COUNT; i++) {
+    for(uint8_t i = 0; i < BADMOUSE_SETTING_COUNT; i++) {
         uint8_t y = start_y + i * step;
         canvas_draw_str_aligned(
             canvas,
@@ -30,9 +29,9 @@ static void draw_settings(Canvas* canvas, Nrf24Tool* context) {
             y,
             AlignLeft,
             AlignTop,
-            context->settings->sniff_settings[i + draw_index].name);
+            context->settings->badmouse_settings[i + draw_index].name);
         setting_value_to_string(
-            context->settings->sniff_settings[i + draw_index], value, sizeof(value));
+            context->settings->badmouse_settings[i + draw_index], value, sizeof(value));
         canvas_draw_str_aligned(canvas, 126, y, AlignRight, AlignTop, value);
     }
 
@@ -53,7 +52,7 @@ static void draw_run(Canvas* canvas, Nrf24Tool* context) {
 
     // draw title
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 0, 0, AlignLeft, AlignTop, "Mode : Sniffing");
+    canvas_draw_str_aligned(canvas, 0, 0, AlignLeft, AlignTop, "Mode : Bad Mouse");
     canvas_draw_line(canvas, 0, 10, canvas_width(canvas), 10);
 
     // draw status
@@ -66,38 +65,6 @@ static void draw_run(Canvas* canvas, Nrf24Tool* context) {
     else
         canvas_draw_str_aligned(
             canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, "Status : IDLE");
-    // current channel
-    line_num++;
-    char status_str[30];
-    if(sniff_status.current_channel != 0)
-        snprintf(
-            status_str, sizeof(status_str), "Scanning channel : %u", sniff_status.current_channel);
-    else
-        snprintf(status_str, sizeof(status_str), "Testing address : %s", sniff_status.tested_addr);
-    canvas_draw_str_aligned(
-        canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
-    // find address
-    line_num++;
-    if(confirmed_idx == 0) {
-        strcpy(status_str, "Address found : NONE");
-        confirmed_idx_draw = 0;
-    } else {
-        char hex_addr[11];
-        hexlify(confirmed[confirmed_idx_draw], MAX_MAC_SIZE, hex_addr);
-        snprintf(status_str, sizeof(status_str), "Address found : %s", hex_addr);
-    }
-    canvas_draw_str_aligned(
-        canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
-    line_num++;
-    // counters
-    snprintf(
-        status_str,
-        sizeof(status_str),
-        "Found : %u    |    New : %u",
-        sniff_status.addr_find_count,
-        sniff_status.addr_new_count);
-    canvas_draw_str_aligned(
-        canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
 }
 
 static void input_setting(InputEvent* event, Nrf24Tool* context) {
@@ -107,14 +74,14 @@ static void input_setting(InputEvent* event, Nrf24Tool* context) {
     switch(event->key) {
     case InputKeyDown:
         user_index++;
-        if(user_index == SNIFF_SETTING_COUNT) user_index = 0;
+        if(user_index == BADMOUSE_SETTING_COUNT) user_index = 0;
         break;
 
     case InputKeyUp:
         if(user_index > 0)
             user_index--;
         else
-            user_index = SNIFF_SETTING_COUNT - 1;
+            user_index = BADMOUSE_SETTING_COUNT - 1;
         break;
 
     case InputKeyLeft:
@@ -133,12 +100,7 @@ static void input_setting(InputEvent* event, Nrf24Tool* context) {
         break;
 
     case InputKeyOk:
-        if(context->settings->sniff_settings[SNIFF_SETTING_MAX_CHANNEL].value.u8 >
-           context->settings->sniff_settings[SNIFF_SETTING_MIN_CHANNEL].value.u8) {
-            context->tool_running = true;
-            context->currentMode = MODE_SNIFF_RUN;
-            furi_thread_start(context->sniff_thread);
-        }
+        
         break;
 
     case InputKeyBack:
@@ -156,18 +118,16 @@ static void input_setting(InputEvent* event, Nrf24Tool* context) {
 static void input_run(InputEvent* event, Nrf24Tool* context) {
     switch(event->key) {
     case InputKeyLeft:
-        if(confirmed_idx_draw > 0) confirmed_idx_draw--;
         break;
 
     case InputKeyRight:
-        if(confirmed_idx_draw < (confirmed_idx - 1)) confirmed_idx_draw++;
         break;
 
     case InputKeyOk:
         if(!context->tool_running) {
             context->tool_running = true;
-            if(furi_thread_get_state(context->sniff_thread) == FuriThreadStateStopped)
-                furi_thread_start(context->sniff_thread);
+            if(furi_thread_get_state(context->badmouse_thread) == FuriThreadStateStopped)
+                furi_thread_start(context->badmouse_thread);
         }
         break;
 
@@ -175,23 +135,22 @@ static void input_run(InputEvent* event, Nrf24Tool* context) {
         if(context->tool_running)
             context->tool_running = false;
         else {
-            context->currentMode = MODE_SNIFF_SETTINGS;
+            context->currentMode = MODE_BADMOUSE_SETTINGS;
         }
-        furi_thread_join(context->sniff_thread);
+        furi_thread_join(context->badmouse_thread);
         break;
 
     default:
         break;
     }
-    if(confirmed_idx_draw > (confirmed_idx - 1)) confirmed_idx_draw = (confirmed_idx - 1);
 }
 
-void sniff_draw(Canvas* canvas, Nrf24Tool* context) {
-    if(context->currentMode == MODE_SNIFF_SETTINGS) draw_settings(canvas, context);
-    if(context->currentMode == MODE_SNIFF_RUN) draw_run(canvas, context);
+void badmouse_draw(Canvas* canvas, Nrf24Tool* context) {
+    if(context->currentMode == MODE_BADMOUSE_SETTINGS) draw_settings(canvas, context);
+    if(context->currentMode == MODE_BADMOUSE_RUN) draw_run(canvas, context);
 }
 
-void sniff_input(InputEvent* event, Nrf24Tool* context) {
-    if(context->currentMode == MODE_SNIFF_SETTINGS) input_setting(event, context);
-    if(context->currentMode == MODE_SNIFF_RUN) input_run(event, context);
+void badmouse_input(InputEvent* event, Nrf24Tool* context) {
+    if(context->currentMode == MODE_BADMOUSE_SETTINGS) input_setting(event, context);
+    if(context->currentMode == MODE_BADMOUSE_RUN) input_run(event, context);
 }

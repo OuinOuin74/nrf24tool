@@ -5,6 +5,7 @@
 #include "nrf24tool.h"
 #include "libnrf24/nrf24.h"
 #include "sniff/sniff.h"
+#include "badmouse/badmouse.h"
 #include "settings.h"
 
 // Main app variable
@@ -12,7 +13,6 @@ Nrf24Tool* nrf24Tool_app = NULL;
 
 // application settings file path
 const char* FILE_PATH_SETTINGS = APP_DATA_PATH("settings.conf");
-const char* CURRENT_MODE = "app_mode";
 
 static bool load_setting(Nrf24Tool* context) {
     size_t file_size = 0;
@@ -20,6 +20,8 @@ static bool load_setting(Nrf24Tool* context) {
     // set defaults settings
     context->settings = &nrf24Tool_settings;
     memcpy(context->settings->sniff_settings, sniff_defaults, sizeof(sniff_defaults));
+    memcpy(context->settings->badmouse_settings, badmouse_defaults, sizeof(badmouse_defaults));
+    context->currentMode = MODE_MENU;
 
     context->storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = file_stream_alloc(context->storage);
@@ -43,13 +45,6 @@ static bool load_setting(Nrf24Tool* context) {
                 FuriString* value = furi_string_alloc_set(line);
                 furi_string_left(key, equal_pos);
                 furi_string_right(value, equal_pos + 1);
-
-                // restore last mode
-                if(furi_string_cmp_str(key, CURRENT_MODE) == 0) {
-                    int mode_int = atoi(furi_string_get_cstr(value));
-                    if(mode_int > 0) context->currentMode = mode_int;
-                    continue;
-                }
 
                 // find parameter name in settings map
                 for(uint8_t i = 0; i < SETTINGS_QTY; i++) {
@@ -112,13 +107,8 @@ static bool save_setting(Nrf24Tool* context) {
 
     context->storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = file_stream_alloc(context->storage);
-    FuriString* line = furi_string_alloc_set_str(CURRENT_MODE);
 
     if(file_stream_open(stream, FILE_PATH_SETTINGS, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-        // save current mode
-        furi_string_push_back(line, '=');
-        furi_string_cat_printf(line, "%u", context->currentMode);
-        stream_write_format(stream, "%s=%u\n", CURRENT_MODE, context->currentMode);
         for(uint8_t i = 0; i < SETTINGS_QTY; i++) {
             switch(settings_map[i].type) {
             case SETTING_TYPE_UINT8:
@@ -156,7 +146,6 @@ static bool save_setting(Nrf24Tool* context) {
         FURI_LOG_E(LOG_TAG, "Error saving settings to file");
     }
 
-    furi_string_free(line);
     file_stream_close(stream);
     stream_free(stream);
     furi_record_close(RECORD_STORAGE);
@@ -166,12 +155,21 @@ static bool save_setting(Nrf24Tool* context) {
 
 /* Draw the GUI of the application. The screen is completely redrawn during each call. */
 static void draw_callback(Canvas* canvas, void* ctx) {
-    Nrf24Tool* context = ctx;
+    Nrf24Tool* context = (Nrf24Tool*)ctx;
 
     switch(context->currentMode) {
+    case MODE_MENU:
+        draw_menu(canvas);
+        break;
+
     case MODE_SNIFF_SETTINGS:
     case MODE_SNIFF_RUN:
         sniff_draw(canvas, context);
+        break;
+
+    case MODE_BADMOUSE_SETTINGS:
+    case MODE_BADMOUSE_RUN:
+        badmouse_draw(canvas, context);
         break;
 
     default:
@@ -188,9 +186,18 @@ static void input_callback(InputEvent* event, void* ctx) {
 
 static void inputHandler(InputEvent* event, Nrf24Tool* context) {
     switch(context->currentMode) {
+    case MODE_MENU:
+        input_menu(event, context);
+        break;
+
     case MODE_SNIFF_SETTINGS:
     case MODE_SNIFF_RUN:
         sniff_input(event, context);
+        break;
+
+    case MODE_BADMOUSE_SETTINGS:
+    case MODE_BADMOUSE_RUN:
+        badmouse_input(event, context);
         break;
 
     default:
@@ -241,8 +248,6 @@ static void nrf24Tool_free(Nrf24Tool* context) {
 static void nrf24Tool_run(Nrf24Tool* context) {
     // Init NRF24 communication
     nrf24_init();
-
-    if(!nrf24_check_connected()) context->currentMode = MODE_RF24_DISCONNECTED;
 
     // load application settings
     if(!load_setting(context)) FURI_LOG_E(LOG_TAG, "Unable to load application settings !");

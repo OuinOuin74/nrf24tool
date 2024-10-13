@@ -154,6 +154,41 @@ void set_setting_value(Setting* setting, uint32_t new_value) {
     }
 }
 
+bool is_hex_address(const char *str) {
+    // Check if the string is exactly 8 characters long
+    if (strlen(str) != HEX_MAC_LEN) {
+        return false;
+    }
+
+    // Check if all characters are valid hexadecimal digits
+    for (int i = 0; i < HEX_MAC_LEN - 1; i++) {
+        if (!isxdigit((unsigned char)str[i])) {
+            return false;
+        }
+    }
+
+    // If all checks pass, it's a valid hexadecimal address
+    return true;
+}
+
+bool is_hex_address_furi(const FuriString* furi_str) {
+    // Get the length of the FuriString
+    if(furi_string_size(furi_str) != HEX_MAC_LEN) {
+        return false;
+    }
+
+    // Iterate over the string and check if each character is a valid hex digit
+    for(size_t i = 0; i < HEX_MAC_LEN - 1; i++) {
+        char c = furi_string_get_char(furi_str, i); // Get character at index 'i'
+        if(!isxdigit(c)) { // Check if it's a valid hex digit (0-9, a-f, A-F)
+            return false;
+        }
+    }
+
+    // If all checks pass, it's a valid 8-character hexadecimal address
+    return true;
+}
+
 uint64_t bytes_to_int64(uint8_t* bytes, uint8_t size, bool bigendian) {
     uint64_t ret = 0;
     for(int i = 0; i < size; i++) {

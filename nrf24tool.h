@@ -36,7 +36,6 @@ typedef struct Nrf24Tool {
     Storage* storage;
     Stream* stream;
     NotificationApp* notification;
-    DialogMessage* dialogs;
     FuriThread* sniff_thread;
     FuriThread* badmouse_thread;
     Mode currentMode;

@@ -12,7 +12,7 @@ uint8_t candidates[MAX_ADDRS][5] = {0}; // last 100 sniffed addresses
 uint32_t counts[MAX_ADDRS];
 uint8_t confirmed[MAX_CONFIRMED][5] = {0}; // first 32 confirmed addresses
 uint8_t confirmed_idx = 0;
-const char* FILE_PATH_ADDR = APP_DATA_PATH("addresses.txt");
+static const char* FILE_PATH_ADDR = APP_DATA_PATH("addresses.txt");
 uint32_t total_candidates = 0;
 uint32_t candidate_idx = 0;
 char top_address[HEX_MAC_LEN];

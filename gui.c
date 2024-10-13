@@ -1,5 +1,6 @@
 #include "nrf24tool.h"
 #include "helper.h"
+#include "badmouse/badmouse.h"
 
 static uint8_t user_index = 0;
 static uint8_t draw_index = 0;
@@ -21,13 +22,17 @@ void draw_menu(Canvas* canvas) {
     // draw menu
     canvas_set_font(canvas, FontSecondary);
     uint8_t line = 0;
-    canvas_draw_str_aligned(canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Reception");
+    canvas_draw_str_aligned(
+        canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Reception");
     line++;
-    canvas_draw_str_aligned(canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Emission");
+    canvas_draw_str_aligned(
+        canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Emission");
     line++;
-    canvas_draw_str_aligned(canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Sniffer");
+    canvas_draw_str_aligned(
+        canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Sniffer");
     line++;
-    canvas_draw_str_aligned(canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Bad Mouse");
+    canvas_draw_str_aligned(
+        canvas, start_x, start_y + (line * step), AlignLeft, AlignTop, "Bad Mouse");
 
     // draw index
     canvas_set_color(canvas, ColorXOR);
@@ -41,7 +46,6 @@ void draw_menu(Canvas* canvas) {
 }
 
 void input_menu(InputEvent* event, Nrf24Tool* context) {
-
     switch(event->key) {
     case InputKeyDown:
         user_index++;
@@ -56,7 +60,12 @@ void input_menu(InputEvent* event, Nrf24Tool* context) {
         break;
 
     case InputKeyOk:
+        // change active mode
         context->currentMode = (Mode)(user_index * 2 + 1);
+        if(context->currentMode == MODE_BADMOUSE_SETTINGS) {
+            bm_read_address(context);
+            bm_read_layouts(context);
+        }
         break;
 
     case InputKeyBack:

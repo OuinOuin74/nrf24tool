@@ -220,9 +220,9 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
     view_port_enabled_set(context->view_port, true);
 
     context->sniff_thread = furi_thread_alloc_ex("Sniff", 1024, nrf24_sniff, context);
+    context->badmouse_thread = furi_thread_alloc_ex("BadMouse", 2048, nrf24_badmouse, context);
 
     context->notification = furi_record_open(RECORD_NOTIFICATION);
-    context->dialogs = dialog_message_alloc();
 
     return context;
 }
@@ -237,9 +237,9 @@ static void nrf24Tool_free(Nrf24Tool* context) {
     furi_message_queue_free(context->event_queue);
     
     furi_thread_free(context->sniff_thread);
+    furi_thread_free(context->badmouse_thread);
 
     furi_record_close(RECORD_NOTIFICATION);
-    dialog_message_free(context->dialogs);
 
     free(context);
 }

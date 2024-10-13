@@ -7,13 +7,17 @@
 #include "../libnrf24/nrf24.h"
 #include "../settings.h"
 #include "../helper.h"
+#include "stream/file_stream.h"
+#include <storage/storage.h>
+#include <gui/modules/dialog_ex.h>
 
-#define BAD_USB_APP_BASE_FOLDER        EXT_PATH("badusb")
-#define BAD_USB_APP_PATH_LAYOUT_FOLDER BAD_USB_APP_BASE_FOLDER "/assets/layouts"
-#define BAD_USB_APP_SCRIPT_EXTENSION   ".txt"
-#define BAD_USB_APP_LAYOUT_EXTENSION   ".kl"
-#define MAX_CONFIRMED_ADDR             32
-#define DEFAULT_KB_LAYOUT              "en-US"
+#define BAD_USB_APP_BASE_FOLDER EXT_PATH("badusb")
+#define FOLDER_PATH_LAYOUT      BAD_USB_APP_BASE_FOLDER "/assets/layouts"
+#define SCRIPT_EXTENSION        ".txt"
+#define LAYOUT_EXTENSION        ".kl"
+#define MAX_CONFIRMED_ADDR      32
+#define MAX_KB_LAYOUT           32
+#define LAYOUT_NAME_LENGHT      11
 
 typedef struct BadMouse {
     NRF24L01_Config* config;
@@ -42,7 +46,14 @@ typedef struct BadMouse {
 } BadMouse;
 
 extern Setting badmouse_defaults[BADMOUSE_SETTING_COUNT];
+extern BadMouse bm_instance;
+extern uint8_t addr_qty;
+extern char addr_list[MAX_CONFIRMED_ADDR][HEX_MAC_LEN];
+extern uint8_t layout_qty;
+extern char layout_list[MAX_KB_LAYOUT][LAYOUT_NAME_LENGHT];
 
 int32_t nrf24_badmouse(void* ctx);
 void badmouse_draw(Canvas* canvas, Nrf24Tool* context);
 void badmouse_input(InputEvent* event, Nrf24Tool* context);
+uint8_t bm_read_address(Nrf24Tool* context);
+void bm_read_layouts(Nrf24Tool* context);

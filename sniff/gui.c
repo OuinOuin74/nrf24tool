@@ -1,53 +1,15 @@
 #include "sniff.h"
 #include "../helper.h"
 
-static uint8_t user_index = 0;
-static uint8_t draw_index = 0;
 static uint8_t confirmed_idx_draw = 0;
-static const uint8_t ITEMS_ON_SCREEN = 4;
 static const uint8_t start_x = 2;
 static const uint8_t start_y = 14;
 static const uint8_t step = 13;
-static const uint8_t index_height = 12;
+VariableItem* sniff_item[SNIFF_SETTING_COUNT];
 
-static void draw_settings(Canvas* canvas, Nrf24Tool* context) {
-    //const size_t middle_x = canvas_width(canvas) / 2U;
-    canvas_set_color(canvas, ColorBlack);
+static void run_draw_callback(Canvas* canvas, void* model) {
+    Nrf24Tool* app = (Nrf24Tool*)model;
 
-    // draw title
-    canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 0, 0, AlignLeft, AlignTop, "Mode : Sniffing");
-    canvas_draw_line(canvas, 0, 10, canvas_width(canvas), 10);
-
-    // draw settings
-    char value[10];
-    canvas_set_font(canvas, FontSecondary);
-    for(uint8_t i = 0; i < SNIFF_SETTING_COUNT; i++) {
-        uint8_t y = start_y + i * step;
-        canvas_draw_str_aligned(
-            canvas,
-            start_x,
-            y,
-            AlignLeft,
-            AlignTop,
-            context->settings->sniff_settings[i + draw_index].name);
-        setting_value_to_string(
-            context->settings->sniff_settings[i + draw_index], value, sizeof(value));
-        canvas_draw_str_aligned(canvas, 126, y, AlignRight, AlignTop, value);
-    }
-
-    // draw index
-    canvas_set_color(canvas, ColorXOR);
-    canvas_draw_rbox(
-        canvas,
-        0,
-        (start_y - 2) + (user_index - draw_index) * step,
-        canvas_width(canvas),
-        index_height,
-        0);
-}
-
-static void draw_run(Canvas* canvas, Nrf24Tool* context) {
     //const size_t middle_x = canvas_width(canvas) / 2U;
     canvas_set_color(canvas, ColorBlack);
 
@@ -60,7 +22,7 @@ static void draw_run(Canvas* canvas, Nrf24Tool* context) {
     canvas_set_font(canvas, FontSecondary);
     // application status
     uint8_t line_num = 0;
-    if(context->tool_running)
+    if(app->tool_running)
         canvas_draw_str_aligned(
             canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, "Status : RUN");
     else
@@ -100,59 +62,6 @@ static void draw_run(Canvas* canvas, Nrf24Tool* context) {
         canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
 }
 
-static void input_setting(InputEvent* event, Nrf24Tool* context) {
-    Setting* setting = &context->settings->sniff_settings[user_index];
-    uint32_t value = get_setting_value(setting);
-
-    switch(event->key) {
-    case InputKeyDown:
-        user_index++;
-        if(user_index == SNIFF_SETTING_COUNT) user_index = 0;
-        break;
-
-    case InputKeyUp:
-        if(user_index > 0)
-            user_index--;
-        else
-            user_index = SNIFF_SETTING_COUNT - 1;
-        break;
-
-    case InputKeyLeft:
-        if(value >= setting->min + setting->step)
-            set_setting_value(setting, value - setting->step);
-        else
-            set_setting_value(setting, setting->max);
-        break;
-
-    case InputKeyRight:
-        value += setting->step;
-        if(value > setting->max)
-            set_setting_value(setting, setting->min);
-        else
-            set_setting_value(setting, value);
-        break;
-
-    case InputKeyOk:
-        if(context->settings->sniff_settings[SNIFF_SETTING_MAX_CHANNEL].value.u8 >
-           context->settings->sniff_settings[SNIFF_SETTING_MIN_CHANNEL].value.u8) {
-            context->tool_running = true;
-            context->currentMode = MODE_SNIFF_RUN;
-            furi_thread_start(context->sniff_thread);
-        }
-        break;
-
-    case InputKeyBack:
-        context->currentMode = MODE_MENU;
-        break;
-
-    default:
-        break;
-    }
-    // adjust draw index
-    if(user_index >= ITEMS_ON_SCREEN) draw_index = user_index - ITEMS_ON_SCREEN + 1;
-    if(user_index < draw_index) draw_index = user_index;
-}
-
 static void input_run(InputEvent* event, Nrf24Tool* context) {
     switch(event->key) {
     case InputKeyLeft:
@@ -186,12 +95,63 @@ static void input_run(InputEvent* event, Nrf24Tool* context) {
     if(confirmed_idx_draw > (confirmed_idx - 1)) confirmed_idx_draw = (confirmed_idx - 1);
 }
 
-void sniff_draw(Canvas* canvas, Nrf24Tool* context) {
-    if(context->currentMode == MODE_SNIFF_SETTINGS) draw_settings(canvas, context);
-    if(context->currentMode == MODE_SNIFF_RUN) draw_run(canvas, context);
+static void item_change_callback(VariableItem* item) {
+    Nrf24Tool* app = (Nrf24Tool*)variable_item_get_context(item);
+    
+    uint8_t current_setting = variable_item_list_get_selected_item_index(app->sniff_settings);
+    uint8_t current_index = variable_item_get_current_value_index(item);
+
+    if(current_setting >= SNIFF_SETTING_COUNT) return;
+    Setting* setting = &app->settings->sniff_settings[current_setting];
+    set_setting_value(setting, (current_index * setting->step) + setting->min);
+    
+    char buffer[20];
+    setting_value_to_string(app->settings->sniff_settings[current_setting], buffer, sizeof(buffer));
+    variable_item_set_current_value_text(item, buffer);
 }
 
-void sniff_input(InputEvent* event, Nrf24Tool* context) {
-    if(context->currentMode == MODE_SNIFF_SETTINGS) input_setting(event, context);
-    if(context->currentMode == MODE_SNIFF_RUN) input_run(event, context);
+static void settings_enter_callback(void* context, uint32_t index) {
+    UNUSED(index);
+    Nrf24Tool* app = (Nrf24Tool*)context;
+
+    app->currentMode = MODE_SNIFF_RUN;
+    view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_SNIFF_RUN);
+}
+
+static uint32_t settings_exit_callback(void* context) {
+    Nrf24Tool* app = (Nrf24Tool*)context;
+
+    app->currentMode = MODE_MENU;
+    view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_MENU);
+    return 0;
+}
+
+void sniff_alloc(Nrf24Tool* app) {
+    app->sniff_settings = variable_item_list_alloc();
+
+    variable_item_list_set_header(app->sniff_settings, "Mode : Sniffing");
+
+    for(uint8_t i = 0; i < SNIFF_SETTING_COUNT; i++) {
+        sniff_item[i] = variable_item_list_add(
+            app->sniff_settings,
+            app->settings->sniff_settings[i].name,
+            MAX_SETTINGS(app->settings->sniff_settings[i]),
+            item_change_callback,
+            app);
+    }
+
+    variable_item_list_set_enter_callback(app->sniff_settings, settings_enter_callback, app);
+    view_set_previous_callback(variable_item_list_get_view(app->sniff_settings), settings_exit_callback);
+    view_dispatcher_add_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS, variable_item_list_get_view(app->sniff_settings));
+
+    app->sniff_run = view_alloc();
+    
+}
+
+void sniff_free(Nrf24Tool* app) {
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_SNIFF_RUN);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_SETTINGS);
+    variable_item_list_free(app->badmouse_settings);
+
+    view_free(app->sniff_run);
 }

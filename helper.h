@@ -4,6 +4,7 @@
 #include <furi.h>
 
 #define HEX_MAC_LEN 11
+#define MAX_SETTINGS(setting) (((setting).max - (setting).min) / (setting).step + 1)
 
 extern char EMPTY_HEX[HEX_MAC_LEN];
 

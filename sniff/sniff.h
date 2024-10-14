@@ -3,6 +3,7 @@
 #include <furi.h>
 #include <gui/gui.h>
 #include <gui/view.h>
+#include <gui/modules/variable_item_list.h>
 
 #include "../nrf24tool.h"
 #include "../libnrf24/nrf24.h"
@@ -23,11 +24,12 @@ typedef struct SniffStatus {
     uint8_t addr_new_count;
 } SniffStatus;
 
+extern VariableItem* sniff_item[SNIFF_SETTING_COUNT];
 extern Setting sniff_defaults[SNIFF_SETTING_COUNT];
 extern SniffStatus sniff_status;
 extern uint8_t confirmed[MAX_CONFIRMED][5]; // first 32 confirmed addresses
 extern uint8_t confirmed_idx;
 
 int32_t nrf24_sniff(void* ctx);
-void sniff_draw(Canvas* canvas, Nrf24Tool* context);
-void sniff_input(InputEvent* event, Nrf24Tool* context);
+void sniff_alloc(Nrf24Tool* app);
+void sniff_free(Nrf24Tool* app);

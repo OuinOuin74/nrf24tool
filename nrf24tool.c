@@ -55,7 +55,8 @@ static bool load_setting(Nrf24Tool* context) {
                         // Handle conversion for numeric types only
                         int value_int = 0;
                         if(settings_map[i].type != SETTING_TYPE_STRING)
-                            value_int = atoi(value_str); // Only convert to int if it's not a string
+                            value_int =
+                                atoi(value_str); // Only convert to int if it's not a string
 
                         switch(settings_map[i].type) {
                         case SETTING_TYPE_UINT8:
@@ -83,7 +84,8 @@ static bool load_setting(Nrf24Tool* context) {
                             *((nrf24_addr_width*)settings_map[i].target) = (uint8_t)value_int;
                             break;
                         case SETTING_TYPE_STRING:
-                            strncpy((char*)settings_map[i].target, value_str, furi_string_size(value));
+                            strncpy(
+                                (char*)settings_map[i].target, value_str, furi_string_size(value));
                             break;
                         }
                     }
@@ -113,15 +115,15 @@ static bool save_setting(Nrf24Tool* context) {
             switch(settings_map[i].type) {
             case SETTING_TYPE_UINT8:
                 stream_write_format(
-                stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
+                    stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
                 continue;
             case SETTING_TYPE_UINT16:
                 stream_write_format(
-                stream, "%s=%u\n", settings_map[i].key, *((uint16_t*)settings_map[i].target));
+                    stream, "%s=%u\n", settings_map[i].key, *((uint16_t*)settings_map[i].target));
                 continue;
             case SETTING_TYPE_UINT32:
                 stream_write_format(
-                stream, "%s=%lu\n", settings_map[i].key, *((uint32_t*)settings_map[i].target));
+                    stream, "%s=%lu\n", settings_map[i].key, *((uint32_t*)settings_map[i].target));
                 continue;
             case SETTING_TYPE_BOOL:
                 if(*(bool*)settings_map[i].target == true)
@@ -133,16 +135,16 @@ static bool save_setting(Nrf24Tool* context) {
             case SETTING_TYPE_TX_POWER:
             case SETTING_TYPE_ADDR_WIDTH:
                 stream_write_format(
-                stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
+                    stream, "%s=%u\n", settings_map[i].key, *((uint8_t*)settings_map[i].target));
                 continue;
             case SETTING_TYPE_STRING:
-                stream_write_format(stream, "%s=%s\n", settings_map[i].key, (char*)settings_map[i].target);
+                stream_write_format(
+                    stream, "%s=%s\n", settings_map[i].key, (char*)settings_map[i].target);
                 continue;
             }
         }
         ret = true;
-    }
-    else {
+    } else {
         FURI_LOG_E(LOG_TAG, "Error saving settings to file");
     }
 
@@ -153,119 +155,80 @@ static bool save_setting(Nrf24Tool* context) {
     return ret;
 }
 
-/* Draw the GUI of the application. The screen is completely redrawn during each call. */
-static void draw_callback(Canvas* canvas, void* ctx) {
-    Nrf24Tool* context = (Nrf24Tool*)ctx;
-
-    switch(context->currentMode) {
-    case MODE_MENU:
-        draw_menu(canvas);
-        break;
-
-    case MODE_SNIFF_SETTINGS:
-    case MODE_SNIFF_RUN:
-        sniff_draw(canvas, context);
-        break;
-
-    case MODE_BADMOUSE_SETTINGS:
-    case MODE_BADMOUSE_RUN:
-        badmouse_draw(canvas, context);
-        break;
-
-    default:
-        break;
-    }
-}
-
-/* This function is called from the GUI thread. All it does is put the event
-   into the application's queue so it can be processed later. */
-static void input_callback(InputEvent* event, void* ctx) {
-    Nrf24Tool* context = (Nrf24Tool*)ctx;
-    furi_message_queue_put(context->event_queue, event, FuriWaitForever);
-}
-
-static void inputHandler(InputEvent* event, Nrf24Tool* context) {
-    switch(context->currentMode) {
-    case MODE_MENU:
-        input_menu(event, context);
-        break;
-
-    case MODE_SNIFF_SETTINGS:
-    case MODE_SNIFF_RUN:
-        sniff_input(event, context);
-        break;
-
-    case MODE_BADMOUSE_SETTINGS:
-    case MODE_BADMOUSE_RUN:
-        badmouse_input(event, context);
-        break;
-
-    default:
-        break;
-    }
-}
-
 /* Allocate the memory and initialise the variables */
 static Nrf24Tool* nrf24Tool_alloc(void) {
-    Nrf24Tool* context = malloc(sizeof(Nrf24Tool));
+    Nrf24Tool* app = malloc(sizeof(Nrf24Tool));
 
-    context->view_port = view_port_alloc();
-    view_port_draw_callback_set(context->view_port, draw_callback, context);
-    view_port_input_callback_set(context->view_port, input_callback, context);
+    Gui* gui = furi_record_open(RECORD_GUI);
 
-    context->event_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
+    app->view_dispatcher = view_dispatcher_alloc();
+    view_dispatcher_attach_to_gui(app->view_dispatcher, gui, ViewDispatcherTypeFullscreen);
+    view_dispatcher_set_event_callback_context(app->view_dispatcher, app);
 
-    context->gui = furi_record_open(RECORD_GUI);
-    gui_add_view_port(context->gui, context->view_port, GuiLayerFullscreen);
-    view_port_enabled_set(context->view_port, true);
+    app->app_menu = submenu_alloc();
+    submenu_set_header(app->app_menu, "Select Tool");
+    submenu_add_item(app->app_menu, "Reception", MENU_RX, app_menu_enter_callback, app);
+    submenu_add_item(app->app_menu, "Emission", MENU_TX, app_menu_enter_callback, app);
+    submenu_add_item(app->app_menu, "Sniffer", MENU_SNIFFER, app_menu_enter_callback, app);
+    submenu_add_item(app->app_menu, "Bad Mouse", MENU_BADMOUSE, app_menu_enter_callback, app);
+    view_set_previous_callback(submenu_get_view(app->app_menu), app_menu_exit_callback);
+    view_dispatcher_add_view(app->view_dispatcher, VIEW_MENU, submenu_get_view(app->app_menu));
+    view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_MENU);
 
-    context->sniff_thread = furi_thread_alloc_ex("Sniff", 1024, nrf24_sniff, context);
-    context->badmouse_thread = furi_thread_alloc_ex("BadMouse", 2048, nrf24_badmouse, context);
+    app->event_queue = furi_message_queue_alloc(8, sizeof(InputEvent));
 
-    context->notification = furi_record_open(RECORD_NOTIFICATION);
+    app->sniff_thread = furi_thread_alloc_ex("Sniff", 1024, nrf24_sniff, app);
+    app->badmouse_thread = furi_thread_alloc_ex("BadMouse", 2048, nrf24_badmouse, app);
 
-    return context;
+    app->notification = furi_record_open(RECORD_NOTIFICATION);
+
+    sniff_alloc(app);
+
+    return app;
 }
 
 /* Release the unused resources and deallocate memory */
-static void nrf24Tool_free(Nrf24Tool* context) {
-    view_port_enabled_set(context->view_port, false);
-    gui_remove_view_port(context->gui, context->view_port);
-    furi_record_close(RECORD_GUI);
-    view_port_free(context->view_port);
-
-    furi_message_queue_free(context->event_queue);
+static void nrf24Tool_free(Nrf24Tool* app) {
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_MENU);
+    submenu_free(app->app_menu);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_NRF24_NOT_CONNECTED);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_RX_SETTINGS);
+    variable_item_list_free(app->rx_settings);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_RX_RUN);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_TX_SETTINGS);
+    variable_item_list_free(app->tx_settings);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_TX_RUN);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS);
+    variable_item_list_free(app->sniff_settings);
     
-    furi_thread_free(context->sniff_thread);
-    furi_thread_free(context->badmouse_thread);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_RUN);
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_NO_CHANNEL);
 
+    sniff_free(app);
+
+    view_dispatcher_free(app->view_dispatcher);
+
+    furi_message_queue_free(app->event_queue);
+
+    furi_thread_free(app->sniff_thread);
+    furi_thread_free(app->badmouse_thread);
+
+    furi_record_close(RECORD_GUI);
     furi_record_close(RECORD_NOTIFICATION);
 
-    free(context);
+    free(app);
 }
 
 /* Starts the reader thread and handles the input */
-static void nrf24Tool_run(Nrf24Tool* context) {
+static void nrf24Tool_run(Nrf24Tool* app) {
     // Init NRF24 communication
     nrf24_init();
 
     // load application settings
-    if(!load_setting(context)) FURI_LOG_E(LOG_TAG, "Unable to load application settings !");
+    if(!load_setting(app)) FURI_LOG_E(LOG_TAG, "Unable to load application settings !");
 
-    /* Endless main program loop */
-    context->app_running = true;
-    while(context->app_running) {
-        InputEvent event;
-        const FuriStatus status =
-            furi_message_queue_get(context->event_queue, &event, FuriWaitForever);
-
-        if((status != FuriStatusOk) ||
-           (event.type != InputTypeShort && event.type != InputTypeRepeat)) {
-            continue;
-        }
-        // make inputs actions
-        inputHandler(&event, context);
-    }
+    // Program main
+    view_dispatcher_run(app->view_dispatcher);
 
     // Deinitialize the nRF24 module
     nrf24_deinit();

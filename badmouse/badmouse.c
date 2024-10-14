@@ -22,7 +22,7 @@ NRF24L01_Config bm_config = {
 
 Setting badmouse_defaults[] = {
     {.name = "ADDR Index", .type = SETTING_TYPE_UINT8, .value.u8 = 0, .min = 0, .max = 0, .step = 1},
-    {.name = "Keyboard Layout",
+    {.name = "KB. Layout",
      .type = SETTING_TYPE_UINT8,
      .value.u8 = 0,
      .min = 0,

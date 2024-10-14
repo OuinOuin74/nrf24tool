@@ -8,7 +8,7 @@ static const uint8_t step = 13;
 VariableItem* sniff_item[SNIFF_SETTING_COUNT];
 
 static void run_draw_callback(Canvas* canvas, void* model) {
-    Nrf24Tool* app = (Nrf24Tool*)model;
+    SniffStatus* status = (SniffStatus*)model;
 
     //const size_t middle_x = canvas_width(canvas) / 2U;
     canvas_set_color(canvas, ColorBlack);
@@ -22,7 +22,7 @@ static void run_draw_callback(Canvas* canvas, void* model) {
     canvas_set_font(canvas, FontSecondary);
     // application status
     uint8_t line_num = 0;
-    if(app->tool_running)
+    if(status->tool_running)
         canvas_draw_str_aligned(
             canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, "Status : RUN");
     else
@@ -31,11 +31,11 @@ static void run_draw_callback(Canvas* canvas, void* model) {
     // current channel
     line_num++;
     char status_str[30];
-    if(sniff_status.current_channel != 0)
+    if(status->current_channel != 0)
         snprintf(
-            status_str, sizeof(status_str), "Scanning channel : %u", sniff_status.current_channel);
+            status_str, sizeof(status_str), "Scanning channel : %u", status->current_channel);
     else
-        snprintf(status_str, sizeof(status_str), "Testing address : %s", sniff_status.tested_addr);
+        snprintf(status_str, sizeof(status_str), "Testing ADDR : %s", status->tested_addr);
     canvas_draw_str_aligned(
         canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
     // find address
@@ -56,13 +56,17 @@ static void run_draw_callback(Canvas* canvas, void* model) {
         status_str,
         sizeof(status_str),
         "Found : %u    |    New : %u",
-        sniff_status.addr_find_count,
-        sniff_status.addr_new_count);
+        status->addr_find_count,
+        status->addr_new_count);
     canvas_draw_str_aligned(
         canvas, start_x, start_y + line_num * step, AlignLeft, AlignTop, status_str);
 }
 
-static void input_run(InputEvent* event, Nrf24Tool* context) {
+static bool run_input_callback(InputEvent* event, void* context) {
+    Nrf24Tool* app = (Nrf24Tool*)context;
+
+    if(event->type != InputTypePress) return false;
+
     switch(event->key) {
     case InputKeyLeft:
         if(confirmed_idx_draw > 0) confirmed_idx_draw--;
@@ -73,26 +77,35 @@ static void input_run(InputEvent* event, Nrf24Tool* context) {
         break;
 
     case InputKeyOk:
-        if(!context->tool_running) {
-            context->tool_running = true;
-            if(furi_thread_get_state(context->sniff_thread) == FuriThreadStateStopped)
-                furi_thread_start(context->sniff_thread);
+        if(!app->tool_running) {
+            app->tool_running = true;
+            if(furi_thread_get_state(app->sniff_thread) == FuriThreadStateStopped)
+                furi_thread_start(app->sniff_thread);
         }
         break;
 
     case InputKeyBack:
-        if(context->tool_running)
-            context->tool_running = false;
+        if(app->tool_running)
+            app->tool_running = false;
         else {
-            context->currentMode = MODE_SNIFF_SETTINGS;
+            view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS);
         }
-        furi_thread_join(context->sniff_thread);
+        furi_thread_join(app->sniff_thread);
         break;
 
     default:
         break;
     }
     if(confirmed_idx_draw > (confirmed_idx - 1)) confirmed_idx_draw = (confirmed_idx - 1);
+    view_commit_model(app->sniff_run, true);
+    return true;
+}
+
+static void set_item_list_name(Setting* setting, VariableItem* item) {
+    char buffer[20];
+
+    setting_value_to_string(setting, buffer, sizeof(buffer));
+    variable_item_set_current_value_text(item, buffer);
 }
 
 static void item_change_callback(VariableItem* item) {
@@ -105,53 +118,56 @@ static void item_change_callback(VariableItem* item) {
     Setting* setting = &app->settings->sniff_settings[current_setting];
     set_setting_value(setting, (current_index * setting->step) + setting->min);
     
-    char buffer[20];
-    setting_value_to_string(app->settings->sniff_settings[current_setting], buffer, sizeof(buffer));
-    variable_item_set_current_value_text(item, buffer);
+    set_item_list_name(setting, item);
 }
 
 static void settings_enter_callback(void* context, uint32_t index) {
     UNUSED(index);
     Nrf24Tool* app = (Nrf24Tool*)context;
-
-    app->currentMode = MODE_SNIFF_RUN;
     view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_SNIFF_RUN);
 }
 
 static uint32_t settings_exit_callback(void* context) {
-    Nrf24Tool* app = (Nrf24Tool*)context;
-
-    app->currentMode = MODE_MENU;
-    view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_MENU);
-    return 0;
+    UNUSED(context);
+    //Nrf24Tool* app = (Nrf24Tool*)context;
+    //app->currentMode = MODE_MENU;
+    //view_dispatcher_switch_to_view(app->view_dispatcher, VIEW_MENU);
+    return VIEW_MENU;
 }
 
 void sniff_alloc(Nrf24Tool* app) {
+
     app->sniff_settings = variable_item_list_alloc();
-
-    variable_item_list_set_header(app->sniff_settings, "Mode : Sniffing");
-
+    variable_item_list_set_header(app->sniff_settings, "Sniffing Settings");
     for(uint8_t i = 0; i < SNIFF_SETTING_COUNT; i++) {
+        Setting* setting = &app->settings->sniff_settings[i];
         sniff_item[i] = variable_item_list_add(
             app->sniff_settings,
-            app->settings->sniff_settings[i].name,
-            MAX_SETTINGS(app->settings->sniff_settings[i]),
+            setting->name,
+            MAX_SETTINGS(setting),
             item_change_callback,
             app);
+        variable_item_set_current_value_index(sniff_item[i], get_setting_index(setting));
+        //FURI_LOG_I(LOG_TAG, "current index : #%u -> value : %u", i, variable_item_get_current_value_index(sniff_item[i]));
+        set_item_list_name(setting, sniff_item[i]);
     }
-
     variable_item_list_set_enter_callback(app->sniff_settings, settings_enter_callback, app);
-    view_set_previous_callback(variable_item_list_get_view(app->sniff_settings), settings_exit_callback);
-    view_dispatcher_add_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS, variable_item_list_get_view(app->sniff_settings));
+    View* view = variable_item_list_get_view(app->sniff_settings);
+    view_set_previous_callback(view, settings_exit_callback);
+    view_dispatcher_add_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS, view);
 
     app->sniff_run = view_alloc();
-    
+    view_set_context(app->sniff_run, app);
+    view_set_draw_callback(app->sniff_run, run_draw_callback);
+    view_set_input_callback(app->sniff_run, run_input_callback);
+    view_allocate_model(app->sniff_run, ViewModelTypeLockFree, sizeof(SniffStatus));
+    view_dispatcher_add_view(app->view_dispatcher, VIEW_SNIFF_RUN, app->sniff_run);
 }
 
 void sniff_free(Nrf24Tool* app) {
+    view_dispatcher_remove_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS);
     view_dispatcher_remove_view(app->view_dispatcher, VIEW_SNIFF_RUN);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_SETTINGS);
-    variable_item_list_free(app->badmouse_settings);
+    variable_item_list_free(app->sniff_settings);
 
     view_free(app->sniff_run);
 }

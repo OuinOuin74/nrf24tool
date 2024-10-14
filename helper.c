@@ -28,22 +28,22 @@ void unhexlify(const char* in, uint8_t size, uint8_t* out) {
 }
 
 // Function to convert the setting value to a string based on the setting type
-const char* setting_value_to_string(Setting setting, char* buffer, size_t buffer_size) {
-    switch(setting.type) {
+const char* setting_value_to_string(Setting* setting, char* buffer, size_t buffer_size) {
+    switch(setting->type) {
     case SETTING_TYPE_UINT8:
-        snprintf(buffer, buffer_size, "%u", setting.value.u8);
+        snprintf(buffer, buffer_size, "%u", setting->value.u8);
         break;
     case SETTING_TYPE_UINT16:
-        snprintf(buffer, buffer_size, "%u", setting.value.u16);
+        snprintf(buffer, buffer_size, "%u", setting->value.u16);
         break;
     case SETTING_TYPE_UINT32:
-        snprintf(buffer, buffer_size, "%lu", setting.value.u32);
+        snprintf(buffer, buffer_size, "%lu", setting->value.u32);
         break;
     case SETTING_TYPE_BOOL:
-        snprintf(buffer, buffer_size, "%s", setting.value.b ? "ON" : "OFF");
+        snprintf(buffer, buffer_size, "%s", setting->value.b ? "ON" : "OFF");
         break;
     case SETTING_TYPE_DATA_RATE:
-        switch(setting.value.d_r) {
+        switch(setting->value.d_r) {
         case DATA_RATE_1MBPS:
             snprintf(buffer, buffer_size, "1 Mbps");
             break;
@@ -59,7 +59,7 @@ const char* setting_value_to_string(Setting setting, char* buffer, size_t buffer
         }
         break;
     case SETTING_TYPE_TX_POWER:
-        switch(setting.value.t_p) {
+        switch(setting->value.t_p) {
         case TX_POWER_M18DBM:
             snprintf(buffer, buffer_size, "-18 dBm");
             break;
@@ -78,7 +78,7 @@ const char* setting_value_to_string(Setting setting, char* buffer, size_t buffer
         }
         break;
     case SETTING_TYPE_ADDR_WIDTH:
-        switch(setting.value.a_w) {
+        switch(setting->value.a_w) {
         case ADDR_WIDTH_2_BYTES:
             snprintf(buffer, buffer_size, "2 Bytes");
             break;
@@ -123,6 +123,11 @@ uint32_t get_setting_value(Setting* setting) {
     default:
         return 0; // Unknown type
     }
+}
+
+uint8_t get_setting_index(Setting* setting) {
+    uint32_t value = get_setting_value(setting);
+    return (uint8_t)((value / setting->step) - (setting->min / setting->step));
 }
 
 // Function to modify the setting value based on the type

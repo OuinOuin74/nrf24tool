@@ -51,8 +51,11 @@ extern uint8_t addr_qty;
 extern char addr_list[MAX_CONFIRMED_ADDR][HEX_MAC_LEN];
 extern uint8_t layout_qty;
 extern char layout_list[MAX_KB_LAYOUT][LAYOUT_NAME_LENGHT];
+extern VariableItem* bm_item[BADMOUSE_SETTING_COUNT];
 
 int32_t nrf24_badmouse(void* ctx);
+void badmouse_alloc(Nrf24Tool* app);
+void badmouse_free(Nrf24Tool* app);
 void badmouse_draw(Canvas* canvas, Nrf24Tool* context);
 void badmouse_input(InputEvent* event, Nrf24Tool* context);
 uint8_t bm_read_address(Nrf24Tool* context);

@@ -21,7 +21,6 @@ static bool load_setting(Nrf24Tool* context) {
     context->settings = &nrf24Tool_settings;
     memcpy(context->settings->sniff_settings, sniff_defaults, sizeof(sniff_defaults));
     memcpy(context->settings->badmouse_settings, badmouse_defaults, sizeof(badmouse_defaults));
-    context->currentMode = MODE_MENU;
 
     context->storage = furi_record_open(RECORD_STORAGE);
     Stream* stream = file_stream_alloc(context->storage);
@@ -182,8 +181,6 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
 
     app->notification = furi_record_open(RECORD_NOTIFICATION);
 
-    sniff_alloc(app);
-
     return app;
 }
 
@@ -191,20 +188,17 @@ static Nrf24Tool* nrf24Tool_alloc(void) {
 static void nrf24Tool_free(Nrf24Tool* app) {
     view_dispatcher_remove_view(app->view_dispatcher, VIEW_MENU);
     submenu_free(app->app_menu);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_NRF24_NOT_CONNECTED);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_RX_SETTINGS);
-    variable_item_list_free(app->rx_settings);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_RX_RUN);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_TX_SETTINGS);
-    variable_item_list_free(app->tx_settings);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_TX_RUN);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS);
-    variable_item_list_free(app->sniff_settings);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_NRF24_NOT_CONNECTED);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_RX_SETTINGS);
+    //variable_item_list_free(app->rx_settings);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_RX_RUN);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_TX_SETTINGS);
+    //variable_item_list_free(app->tx_settings);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_TX_RUN);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_SNIFF_SETTINGS);
     
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_RUN);
-    view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_NO_CHANNEL);
-
-    sniff_free(app);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_RUN);
+    //view_dispatcher_remove_view(app->view_dispatcher, VIEW_BM_NO_CHANNEL);
 
     view_dispatcher_free(app->view_dispatcher);
 
@@ -227,8 +221,16 @@ static void nrf24Tool_run(Nrf24Tool* app) {
     // load application settings
     if(!load_setting(app)) FURI_LOG_E(LOG_TAG, "Unable to load application settings !");
 
+    // Alloc tools
+    sniff_alloc(app);
+    badmouse_alloc(app);
+
     // Program main
     view_dispatcher_run(app->view_dispatcher);
+
+    // Free tools
+    sniff_free(app);
+    badmouse_free(app);
 
     // Deinitialize the nRF24 module
     nrf24_deinit();

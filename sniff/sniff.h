@@ -18,6 +18,7 @@
 #define COUNT_THRESHOLD           2
 
 typedef struct SniffStatus {
+    bool tool_running;
     uint8_t current_channel;
     char tested_addr[HEX_MAC_LEN];
     uint8_t addr_find_count;
@@ -26,7 +27,6 @@ typedef struct SniffStatus {
 
 extern VariableItem* sniff_item[SNIFF_SETTING_COUNT];
 extern Setting sniff_defaults[SNIFF_SETTING_COUNT];
-extern SniffStatus sniff_status;
 extern uint8_t confirmed[MAX_CONFIRMED][5]; // first 32 confirmed addresses
 extern uint8_t confirmed_idx;
 

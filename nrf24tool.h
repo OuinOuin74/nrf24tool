@@ -73,7 +73,6 @@ typedef struct Nrf24Tool {
     NotificationApp* notification;
     FuriThread* sniff_thread;
     FuriThread* badmouse_thread;
-    Mode currentMode;
     Settings* settings;
     bool app_running;
     bool tool_running;

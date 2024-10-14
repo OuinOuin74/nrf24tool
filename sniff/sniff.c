@@ -18,11 +18,6 @@ uint32_t candidate_idx = 0;
 char top_address[HEX_MAC_LEN];
 nrf24_data_rate target_rate = DATA_RATE_2MBPS;
 
-SniffStatus sniff_status = {
-    .current_channel = 0,
-    .addr_find_count = 0,
-};
-
 Setting sniff_defaults[] = {
     {.name = "Min. Channel",
      .type = SETTING_TYPE_UINT8,
@@ -170,13 +165,14 @@ static bool nrf24_sniff_address(uint8_t* address, bool rpd) {
     return false;
 }
 
-static void wrap_up(Nrf24Tool* context) {
+static void wrap_up(Nrf24Tool* app) {
+    SniffStatus* status = view_get_model(app->sniff_run);
     uint8_t ch;
     uint8_t addr[5];
     uint8_t altaddr[5];
     char trying[12];
     int idx;
-    Setting* setting = context->settings->sniff_settings;
+    Setting* setting = app->settings->sniff_settings;
     uint8_t min_channel = setting[SNIFF_SETTING_MIN_CHANNEL].value.u8;
     uint8_t max_channel = setting[SNIFF_SETTING_MAX_CHANNEL].value.u8;
 
@@ -186,12 +182,13 @@ static void wrap_up(Nrf24Tool* context) {
         idx = get_highest_idx();
         if(counts[idx] < COUNT_THRESHOLD) break;
 
-        sniff_status.current_channel = 0;
+        status->current_channel = 0;
         counts[idx] = 0;
         memcpy(addr, candidates[idx], 5);
         hexlify(addr, 5, trying);
         FURI_LOG_I(LOG_TAG, "trying address %s", trying);
-        memcpy(sniff_status.tested_addr, trying, HEX_MAC_LEN);
+        memcpy(status->tested_addr, trying, HEX_MAC_LEN);
+        view_commit_model(app->sniff_run, true);
         ch = nrf24_find_channel(
             addr, addr, ADDR_WIDTH_5_BYTES, target_rate, min_channel, max_channel);
         FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
@@ -200,7 +197,8 @@ static void wrap_up(Nrf24Tool* context) {
             if(previously_confirmed(altaddr)) continue;
             hexlify(altaddr, 5, trying);
             FURI_LOG_I(LOG_TAG, "trying alternate address %s", trying);
-            memcpy(sniff_status.tested_addr, trying, HEX_MAC_LEN);
+            memcpy(status->tested_addr, trying, HEX_MAC_LEN);
+            view_commit_model(app->sniff_run, true);
             ch = nrf24_find_channel(
                 altaddr, altaddr, ADDR_WIDTH_5_BYTES, target_rate, min_channel, max_channel);
             FURI_LOG_I(LOG_TAG, "find_channel returned %d", (int)ch);
@@ -212,25 +210,28 @@ static void wrap_up(Nrf24Tool* context) {
             FURI_LOG_I(LOG_TAG, "Address found ! : %s", top_address);
             if(confirmed_idx < MAX_CONFIRMED) {
                 memcpy(confirmed[confirmed_idx++], addr, ADDR_WIDTH_5_BYTES);
-                stream_write_format(context->stream, "%s\n", top_address);
-                notification_message(context->notification, &sequence_double_vibro);
-                notification_message(context->notification, &sequence_display_backlight_on);
+                stream_write_format(app->stream, "%s\n", top_address);
+                notification_message(app->notification, &sequence_double_vibro);
+                notification_message(app->notification, &sequence_display_backlight_on);
             }
-            sniff_status.addr_find_count = confirmed_idx;
-            sniff_status.addr_new_count++;
+            status->addr_find_count = confirmed_idx;
+            status->addr_new_count++;
+            view_commit_model(app->sniff_run, true);
         }
     }
 }
 
-static bool load_file(Nrf24Tool* context)
+static bool load_file(Nrf24Tool* app)
 {
+    SniffStatus* status = view_get_model(app->sniff_run);
+
     size_t file_size = 0;
 
-    context->storage = furi_record_open(RECORD_STORAGE);
-    context->stream = file_stream_alloc(context->storage);
+    app->storage = furi_record_open(RECORD_STORAGE);
+    app->stream = file_stream_alloc(app->storage);
 
-    if(file_stream_open(context->stream, FILE_PATH_ADDR, FSAM_READ_WRITE, FSOM_OPEN_ALWAYS)) {
-        file_size = stream_size(context->stream);
+    if(file_stream_open(app->stream, FILE_PATH_ADDR, FSAM_READ_WRITE, FSOM_OPEN_ALWAYS)) {
+        file_size = stream_size(app->stream);
 
         // file empty
         if (file_size == 0)
@@ -239,8 +240,8 @@ static bool load_file(Nrf24Tool* context)
         }
         else {
             FuriString* line = furi_string_alloc();
-            stream_rewind(context->stream);
-            while(stream_read_line(context->stream, line)) {
+            stream_rewind(app->stream);
+            while(stream_read_line(app->stream, line)) {
                 // copy previously find adresse
                 size_t line_lenght = furi_string_size(line);
                 if(line_lenght > HEX_MAC_LEN) continue;
@@ -249,8 +250,8 @@ static bool load_file(Nrf24Tool* context)
                     unhexlify(furi_string_get_cstr(line), (line_lenght - 1) / 2, addr);
                     if(!previously_confirmed(addr)) memcpy(confirmed[confirmed_idx++], addr, MAX_MAC_SIZE);
                     else { // delete duplicate address in file
-                        stream_seek(context->stream, line_lenght * (-1), StreamOffsetFromCurrent);
-                        stream_delete(context->stream, line_lenght);
+                        stream_seek(app->stream, line_lenght * (-1), StreamOffsetFromCurrent);
+                        stream_delete(app->stream, line_lenght);
                     }
                 } else {
                     FURI_LOG_E(LOG_TAG, "Sniffing : confirmed buffer overflow!");
@@ -259,24 +260,27 @@ static bool load_file(Nrf24Tool* context)
             }
             furi_string_free(line);
         }
-        sniff_status.addr_find_count = confirmed_idx;
-        sniff_status.addr_new_count = 0;
+        status->addr_find_count = confirmed_idx;
+        status->addr_new_count = 0;
+        view_commit_model(app->sniff_run, true);
         return true;
     }
     return false;
 }
 
 int32_t nrf24_sniff(void* ctx) {
-    Nrf24Tool* context = (Nrf24Tool*)ctx;
+    Nrf24Tool* app = (Nrf24Tool*)ctx;
+    SniffStatus* status = view_get_model(app->sniff_run);
 
     uint8_t address[MAX_MAC_SIZE];
     uint32_t start = 0;
-    Setting* setting = context->settings->sniff_settings;
+    Setting* setting = app->settings->sniff_settings;
     uint8_t min_channel = setting[SNIFF_SETTING_MIN_CHANNEL].value.u8;
     uint8_t max_channel = setting[SNIFF_SETTING_MAX_CHANNEL].value.u8;
     uint8_t target_channel = min_channel;
 
-    memcpy(sniff_status.tested_addr, EMPTY_HEX, HEX_MAC_LEN);
+    memcpy(status->tested_addr, EMPTY_HEX, HEX_MAC_LEN);
+    status->tool_running = true;
     memset(candidates, 0, sizeof(candidates));
     memset(counts, 0, sizeof(counts));
     memset(confirmed, 0, sizeof(confirmed));
@@ -284,24 +288,26 @@ int32_t nrf24_sniff(void* ctx) {
     total_candidates = 0;
     candidate_idx = 0;
 
-    if(!load_file(context))
+    if(!load_file(app))
     {
         FURI_LOG_E(LOG_TAG, "Sniffing : error opening adresses file !");
-        context->tool_running = false;
-        file_stream_close(context->stream);
-        stream_free(context->stream);
+        app->tool_running = false;
+        file_stream_close(app->stream);
+        stream_free(app->stream);
         furi_record_close(RECORD_STORAGE);
         return 1;
     }
 
     sniff_config.channel = target_channel;
-    sniff_config.data_rate = context->settings->sniff_settings[SNIFF_SETTING_DATA_RATE].value.d_r;
+    sniff_config.data_rate = app->settings->sniff_settings[SNIFF_SETTING_DATA_RATE].value.d_r;
     nrf24_configure(&sniff_config);
-    sniff_status.current_channel = target_channel;
+    nrf24_set_mode(MODE_RX);
+    status->current_channel = target_channel;
+    view_commit_model(app->sniff_run, true);
 
     start = furi_get_tick();
 
-    while(context->tool_running) {
+    while(app->tool_running) {
         if(nrf24_sniff_address(address, setting[SNIFF_SETTING_RPD].value.b)) {
             int idx;
             uint8_t* top_addr;
@@ -309,7 +315,7 @@ int32_t nrf24_sniff(void* ctx) {
                 idx = get_addr_index(address, 5);
                 hexlify(address, 5, top_address);
                 FURI_LOG_I(LOG_TAG, "address finded : %s", top_address);
-                notification_message(context->notification, &sequence_blink_blue_10);
+                notification_message(app->notification, &sequence_blink_blue_10);
                 if(idx == -1)
                     insert_addr(address, 5);
                 else {
@@ -326,12 +332,14 @@ int32_t nrf24_sniff(void* ctx) {
             target_channel++;
             if(target_channel > max_channel) target_channel = min_channel;
 
-            wrap_up(context);
+            wrap_up(app);
             sniff_config.channel = target_channel;
-            memcpy(sniff_status.tested_addr, EMPTY_HEX, HEX_MAC_LEN);
+            memcpy(status->tested_addr, EMPTY_HEX, HEX_MAC_LEN);
             nrf24_configure(&sniff_config);
             nrf24_set_mode(MODE_RX);
-            sniff_status.current_channel = target_channel;
+            status->current_channel = target_channel;
+            status->tool_running = true;
+            view_commit_model(app->sniff_run, true);
             FURI_LOG_I(LOG_TAG, "new channel : %d", nrf24_get_chan());
             start = furi_get_tick();
         }
@@ -340,9 +348,13 @@ int32_t nrf24_sniff(void* ctx) {
         furi_delay_ms(100);
     }
     // close addresses file
-    file_stream_close(context->stream);
-    stream_free(context->stream);
+    file_stream_close(app->stream);
+    stream_free(app->stream);
     furi_record_close(RECORD_STORAGE);
+
+    // update view
+    status->tool_running = false;
+    view_commit_model(app->sniff_run, true);
 
     return 0;
 }

@@ -103,7 +103,7 @@ bool nrf24_test_connection(Nrf24Tool* app, uint32_t from_view, uint32_t to_view)
 void app_menu_enter_callback(void* context, uint32_t index);
 uint32_t app_menu_exit_callback(void* context);
 void no_nrf24_result_callback(DialogExResult result, void* context);
-void rx_thread_state_callback(FuriThreadState state, void* context);
-void tx_thread_state_callback(FuriThreadState state, void* context);
-void sniff_thread_state_callback(FuriThreadState state, void* context);
-void bm_thread_state_callback(FuriThreadState state, void* context);
+void rx_thread_state_callback(FuriThread* thread, FuriThreadState state, void* context);
+void tx_thread_state_callback(FuriThread* thread, FuriThreadState state, void* context);
+void sniff_thread_state_callback(FuriThread* thread, FuriThreadState state, void* context);
+void bm_thread_state_callback(FuriThread* thread, FuriThreadState state, void* context);

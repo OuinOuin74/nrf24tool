@@ -36,6 +36,8 @@ This project utilizes an enhanced version of the **libnrf24** library, which has
 
 ## Installation
 
+> **⚠ WARNING:** This program requires Flipper Zero firmware version **1.1.2** or higher. It will not function correctly on earlier versions.
+
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/OuinOuin74/nrf24tool.git
